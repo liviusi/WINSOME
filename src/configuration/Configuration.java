@@ -1,10 +1,11 @@
+package configuration;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ConcurrentModificationException;
 import java.util.Properties;
 
 /**
@@ -12,9 +13,9 @@ import java.util.Properties;
  * @author Giacomo Trapani
  */
 
-
 public class Configuration
 {
+	// prefixes:
 	private static final String SERVERADDRESS_STRING = "SERVERADDRESS";
 	private static final String PORTNOTCP_STRING = "TCPPORT";
 	private static final String PORTNOUDP_STRING = "UDPPORT";
@@ -24,25 +25,41 @@ public class Configuration
 	private static final String PORTNOREGISTRY_STRING = "REGISTRYPORT";
 	private static final String SOCKETTIMEOUT_STRING = "SOCKETTIMEOUT";
 
-	final InetAddress serverAddress;
-	final int portNoTCP;
-	final int portNoUDP;
-	final InetAddress multicastAddress;
-	final int portNoMulticast;
-	final InetAddress registryAddress;
-	final int portNoRegistry;
-	final int socketTimeout;
+	public final InetAddress serverAddress;
+	public final int portNoTCP;
+	public final int portNoUDP;
+	public final InetAddress multicastAddress;
+	public final int portNoMulticast;
+	public final InetAddress registryAddress;
+	public final int portNoRegistry;
+	public final int socketTimeout;
 
-	private static int parsePortNo(String portNoStr) throws NumberFormatException, IllegalArgumentException
+	/**
+	 * @param portNoStr string to be parsed, it cannot be null.
+	 * @return the string as an integer.
+	 * @throws NullPointerException if string is null.
+	 * @throws NumberFormatException if string is not a valid number.
+	 * @throws IllegalArgumentException if string is not in range [1024; 65535].
+	 */
+	private static int parsePortNo(String portNoStr) throws NullPointerException, NumberFormatException, IllegalArgumentException
 	{
+		if (portNoStr == null) throw new NullPointerException();
 		int portNoInt;
 		portNoInt = Integer.parseInt(portNoStr);
 		if (portNoInt < 1024 || portNoInt > 65535) throw new IllegalArgumentException();
 		return portNoInt;
 	}
 
-	public Configuration(File configurationFile) throws FileNotFoundException, IOException, InvalidConfigException, ConcurrentModificationException
+	/**
+	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
+	 * @throws NullPointerException if configurationFile is null.
+	 * @throws FileNotFoundException if configurationFile cannot be found.
+	 * @throws IOException if an I/O error occurs when closing the stream required to read configurationFile.
+	 * @throws InvalidConfigException if configurationFile does not follow the required syntax rules.
+	 */
+	public Configuration(File configurationFile) throws NullPointerException, FileNotFoundException, IOException, InvalidConfigException
 	{
+		if (configurationFile == null) throw new NullPointerException("Configuration file cannot be null.");
 		Properties properties = new Properties();
 		FileInputStream fis = new FileInputStream(configurationFile);
 		properties.load(fis);

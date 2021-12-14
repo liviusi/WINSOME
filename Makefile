@@ -9,10 +9,10 @@ OUTPUTDIR = -d ./bin
 TARGETS = run-client run-server build
 
 InvalidConfigException.java:
-	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/configuration/$@ $(OUTPUTDIR)
 
 Configuration.java: InvalidConfigException.java
-	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/configuration/$@ $(OUTPUTDIR)
 
 ClientMain.java:
 	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
@@ -29,4 +29,4 @@ run-server: ServerMain.java
 	java $(CP) ServerMain ./configs/config.txt
 
 clean:
-	rm -f ./bin/*.class
+	rm -rf ./bin/configuration ./bin/*.class

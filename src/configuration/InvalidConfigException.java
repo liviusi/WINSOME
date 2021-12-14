@@ -1,3 +1,10 @@
+package configuration;
+
+/**
+ * @brief Exception to be thrown when a configuration file is not valid.
+ * @author Giacomo Trapani.
+ */
+
 public class InvalidConfigException extends Exception
 {
 	public InvalidConfigException(String s) { super(s); }
