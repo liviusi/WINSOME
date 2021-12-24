@@ -17,8 +17,8 @@ public class ServerMain
 			System.err.println("A configuration file must be specified.");
 			System.exit(1);
 		}
-		Configuration config = null;
-		try { config = new Configuration(new File(args[0])); }
+		ServerConfiguration config = null;
+		try { config = new ServerConfiguration(new File(args[0])); }
 		catch (Exception e) { e.printStackTrace(); }
 
 		System.out.printf("SERVERADDRESS=%s\nTCPPORT=%d\nUDPPORT=%d\n", config.serverAddress.getHostName(), config.portNoTCP, config.portNoUDP);
