@@ -1,6 +1,6 @@
 JC = javac # compiler
 JFLAGS = -g
-CP = -cp ".:./bin/" # classpath
+CP = -cp ".:./bin/:./libs/gson-2.8.6.jar" # classpath
 JV = java
 OUTPUTDIR = -d ./bin
 
@@ -8,17 +8,31 @@ OUTPUTDIR = -d ./bin
 
 TARGETS = run-client run-server build
 
-InvalidConfigException.java:
+ServerConfiguration.java:
+	$(JC) $(CP) $(JFLAGS) src/configuration/Constants.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/configuration/InvalidConfigException.java $(OUTPUTDIR)
 	$(JC) $(CP) $(JFLAGS) src/configuration/$@ $(OUTPUTDIR)
 
-Configuration.java: InvalidConfigException.java
-	$(JC) $(CP) $(JFLAGS) src/configuration/$@ $(OUTPUTDIR)
+Passwords.java:
+	$(JC) $(CP) $(JFLAGS) src/cryptography/$@ $(OUTPUTDIR)
 
 ClientMain.java:
 	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
 
-ServerMain.java: Configuration.java
+User.java: Passwords.java
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidTagException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/Tag.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
+
+ServerMain.java: ServerConfiguration.java Passwords.java User.java
 	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
+
+rmi-server: User.java
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/PasswordNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/UsernameAlreadyExistsException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/UsernameNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserStorage.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserSet.java $(OUTPUTDIR)
 
 build: ClientMain.java ServerMain.java
 
@@ -29,4 +43,5 @@ run-server: ServerMain.java
 	java $(CP) ServerMain ./configs/config.txt
 
 clean:
-	rm -rf ./bin/configuration ./bin/*.class
+	rm -rf ./bin/*
+	@touch ./bin/.keep

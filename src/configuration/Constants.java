@@ -20,7 +20,8 @@ public class Constants
 	 * @throws NumberFormatException if string is not a valid number.
 	 * @throws IllegalArgumentException if string is not in range [1024; 65535].
 	*/
-	static int parsePortNo(final String portNoStr) throws NullPointerException, NumberFormatException, IllegalArgumentException
+	static int parsePortNo(final String portNoStr)
+	throws NullPointerException, NumberFormatException, IllegalArgumentException
 	{
 		if (portNoStr == null) throw new NullPointerException();
 		final int portNoInt = Integer.parseInt(portNoStr);

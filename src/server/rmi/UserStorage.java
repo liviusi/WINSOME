@@ -8,6 +8,7 @@ import user.InvalidTagException;
 
 public interface UserStorage extends Remote
 {
-	public boolean register(String username, char[] password, Set<String> tags) throws RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-			PasswordNotValidException, InvalidTagException;
+	public boolean register(final String username, final String password, final Set<String> tags, final byte[] salt)
+	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
+		PasswordNotValidException, InvalidTagException;
 }

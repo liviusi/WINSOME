@@ -30,7 +30,8 @@ public class ServerConfiguration
 	 * @throws IOException if an I/O error occurs when closing the stream required to read configurationFile.
 	 * @throws InvalidConfigException if configurationFile does not follow the required syntax rules.
 	*/
-	public ServerConfiguration(final File configurationFile) throws NullPointerException, FileNotFoundException, IOException, InvalidConfigException
+	public ServerConfiguration(final File configurationFile)
+	throws NullPointerException, FileNotFoundException, IOException, InvalidConfigException
 	{
 		if (configurationFile == null) throw new NullPointerException("Configuration file cannot be null.");
 		final Properties properties = new Properties();

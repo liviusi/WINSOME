@@ -6,7 +6,8 @@ public class Tag
 {
 	public final String name;
 
-	public Tag(String name) throws NullPointerException, InvalidTagException
+	public Tag(String name)
+	throws NullPointerException, InvalidTagException
 	{
 		if (name == null) throw new NullPointerException("Tag name cannot be null.");
 		String tmp = name.replaceAll("[^a-zA-Z0-9]", "").toLowerCase(Locale.ITALIAN);
