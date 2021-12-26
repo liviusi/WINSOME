@@ -17,7 +17,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import cryptography.Passwords;
-import user.*;
+import server.user.*;
 
 public class UserSet implements UserStorage
 {
@@ -32,7 +32,7 @@ public class UserSet implements UserStorage
 
 	public boolean register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException
+		PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
 		if (username == null || password == null || tags == null || salt == null) throw new NullPointerException("Parameters cannot be null");
 		if (username.isEmpty()) throw new UsernameNotValidException("Username cannot be empty.");

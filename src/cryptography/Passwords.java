@@ -34,7 +34,7 @@ public class Passwords
 	public static byte[] generateSalt()
 	{
 		byte[] salt = new byte[SALT_LEN];
-		RANDOM.nextBytes(salt);
+		synchronized(RANDOM) { RANDOM.nextBytes(salt); }
 		return salt;
 	}
 }
