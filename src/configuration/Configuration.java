@@ -31,7 +31,7 @@ public class Configuration
 		if (properties.containsKey(Constants.SERVERADDRESS_STRING) && properties.containsKey(Constants.PORTNOTCP_STRING) && 
 			properties.containsKey(Constants.PORTNOUDP_STRING) && properties.containsKey(Constants.MULTICASTADDRESS_STRING) &&
 			properties.containsKey(Constants.REGISTRYADDRESS_STRING) && properties.containsKey(Constants.PORTNOREGISTRY_STRING) &&
-			properties.containsKey(Constants.SOCKETTIMEOUT_STRING) && properties.containsKey(Constants.REGISTERSERVICENAME_STRING))
+			properties.containsKey(Constants.REGISTERSERVICENAME_STRING))
 		{
 			// getting port numbers:
 			try

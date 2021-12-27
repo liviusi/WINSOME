@@ -41,6 +41,7 @@ public class UserSet implements UserStorage
 		User u = new User(username, password, tags, salt);
 		if (!users.add(u))
 			throw new UsernameAlreadyExistsException("Username has already been taken.");
+		System.out.printf("nuovo utente : %s\n", u.toString());
 		return true;
 	}
 

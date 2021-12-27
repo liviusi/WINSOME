@@ -1,6 +1,9 @@
 import java.io.File;
+import java.io.IOException;
 
-import configuration.*;
+import configuration.InvalidConfigException;
+import configuration.ServerConfiguration;
+import server.RMITask;
 
 /**
  * @brief Server file.
@@ -11,16 +14,31 @@ public class ServerMain
 {
 	public static void main(String[] args)
 	{
-		System.out.println("Server is now running...");
-		if (args.length != 1)
+		if (args.length >= 1)
 		{
-			System.err.println("A configuration file must be specified.");
+			System.err.println("Usage: java -cp \".:./bin/:./libs/gson-2.8.6.jar\" ServerMain <path/to/config>");
 			System.exit(1);
 		}
-		ServerConfiguration config = null;
-		try { config = new ServerConfiguration(new File(args[0])); }
-		catch (Exception e) { e.printStackTrace(); }
+		String configFilename = null;
+		if (args.length == 0)
+		{
+			configFilename = "./configs/server.txt";
+			System.out.printf("No config files have been provided. Default will be used: %s.\n", configFilename);
+		}
+		else configFilename = args[0];
 
-		System.out.printf("SERVERADDRESS=%s\nTCPPORT=%d\nUDPPORT=%d\n", config.serverAddress.getHostName(), config.portNoTCP, config.portNoUDP);
+		ServerConfiguration configuration = null;
+		try { configuration = new ServerConfiguration(new File(configFilename)); }
+		catch (NullPointerException | IOException | InvalidConfigException  e)
+		{
+			System.err.println("Fatal error occurred while parsing configuration: now aborting...");
+			e.printStackTrace();
+			System.exit(1);
+		}
+
+		System.out.println("Server is now running...");
+		Thread rmi = new Thread(new RMITask(configuration));
+		rmi.start();
+		
 	}
 }

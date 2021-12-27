@@ -25,7 +25,7 @@ public class ClientMain
 	private static final String QUIT_STRING = ":q!";
 	private static final String HELP_STRING = "help";
 	private static final String REGISTER_STRING = "register";
-	// private static final String LOGIN_STRING = "login";
+	private static final String LOGIN_STRING = "login";
 
 	public static void main(String[] args)
 	{
@@ -56,6 +56,7 @@ public class ClientMain
 		loop:
 			while(true)
 			{
+				System.out.printf("> ");
 				String s = scanner.nextLine();
 				if (s.equalsIgnoreCase(QUIT_STRING)) break loop;
 				if (s.equalsIgnoreCase(HELP_STRING))
@@ -75,10 +76,10 @@ public class ClientMain
 					Set<String> tags = new HashSet<>();
 					for (int i = 3; i < len; i++)
 						tags.add(command[i]);
-					try { Command.register(command[0], command[1], tags, configuration.portNoMulticast, configuration.registerServiceName, true); }
+					try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
 					catch (RemoteException | NotBoundException e)
 					{
-						System.err.printf("Exception occurred during registration:\n%s\nNow aborting...", e.getMessage());
+						System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
 						System.exit(1);
 					}
 					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
@@ -96,6 +97,19 @@ public class ClientMain
 						System.err.printf("Username has already been taken.\n");
 						continue;
 					}
+					continue;
+				}
+				if (s.startsWith(LOGIN_STRING))
+				{
+					int len = command.length;
+					if (len < 3)
+					{
+						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
+						continue;
+					}
+					// Command.login(command[1], command[2], server, verbose)
+					System.out.println("Has yet to be implemented.");
+					continue;
 				}
 			}
 		scanner.close();
