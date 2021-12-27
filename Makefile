@@ -16,17 +16,14 @@ ServerConfiguration.java:
 Passwords.java:
 	$(JC) $(CP) $(JFLAGS) src/cryptography/$@ $(OUTPUTDIR)
 
-ClientMain.java: User.java
-	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
-
 User.java: Passwords.java
 	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidTagException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLoginException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLogoutException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/WrongCredentialsException.java $(OUTPUTDIR)
 	$(JC) $(CP) $(JFLAGS) src/server/user/TagListTooLongException.java $(OUTPUTDIR)
 	$(JC) $(CP) $(JFLAGS) src/server/user/Tag.java $(OUTPUTDIR)
 	$(JC) $(CP) $(JFLAGS) src/server/user/User.java $(OUTPUTDIR)
-
-ServerMain.java: ServerConfiguration.java Passwords.java User.java
-	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
 
 rmi-server: User.java
 	$(JC) $(CP) $(JFLAGS) src/server/rmi/PasswordNotValidException.java $(OUTPUTDIR)
@@ -36,7 +33,15 @@ rmi-server: User.java
 	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserSet.java $(OUTPUTDIR)
 
 api: rmi-server
-	$(JC) $(CP) $(JFLAGS) src/api/Register.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/Constants.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/CommandCode.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
+
+ClientMain.java: api
+	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
+
+ServerMain.java: ServerConfiguration.java Passwords.java User.java
+	$(JC) $(CP) $(JFLAGS) src/$@ $(OUTPUTDIR)
 
 build: ClientMain.java ServerMain.java
 
