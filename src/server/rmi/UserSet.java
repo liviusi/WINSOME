@@ -36,9 +36,9 @@ public class UserSet implements UserStorage
 	{
 		if (username == null || password == null || tags == null || salt == null) throw new NullPointerException("Parameters cannot be null");
 		if (username.isEmpty()) throw new UsernameNotValidException("Username cannot be empty.");
-		String emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(), salt);
+		String emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.UTF_8), salt);
 		if (emptyStringHashed.equals(password)) throw new PasswordNotValidException("Password cannot be empty.");
-		User u = new User(username, password, tags);
+		User u = new User(username, password, tags, salt);
 		if (!users.add(u))
 			throw new UsernameAlreadyExistsException("Username has already been taken.");
 		return true;
@@ -76,8 +76,6 @@ public class UserSet implements UserStorage
 				}
 				if (i < users.size() - 1) writeChar(c, ',');
 			}
-				// Scrivo una parentesi quadra chiusa sul file per segnalare
-				// la fine della lista di conti correnti.
 			writeChar(c, ']');
 		}
 	}

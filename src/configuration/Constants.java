@@ -10,6 +10,7 @@ public class Constants
 	static final String REGISTRYADDRESS_STRING = "REGISTRYHOST";
 	static final String PORTNOREGISTRY_STRING = "REGISTRYPORT";
 	static final String SOCKETTIMEOUT_STRING = "SOCKETTIMEOUT";
+	static final String REGISTERSERVICENAME_STRING = "REGISTERSERVICENAME";
 
 	private Constants() { }
 
