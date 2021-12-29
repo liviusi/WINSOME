@@ -1,5 +1,6 @@
 package server;
 
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -13,16 +14,18 @@ public class RMITask implements Runnable
 {
 	public final int port;
 	public final String serviceName;
+	private UserSet users = null;
+	public static final int TIMEOUT = 10000;
 
-	public RMITask(ServerConfiguration configuration)
+	public RMITask(ServerConfiguration configuration, UserSet users)
 	{
 		this.port = configuration.portNoRegistry;
 		this.serviceName = configuration.registerServiceName;
+		this.users = users;
 	}
 
 	public void run()
 	{
-		UserSet users = new UserSet();
 		UserStorage stub = null;
 		Registry r = null;
 		try
@@ -37,6 +40,23 @@ public class RMITask implements Runnable
 			System.err.printf("Fatal error occurred:\n%s\n", e.getMessage());
 			System.exit(1);
 		}
-		System.out.println("ok rmi!");
+		System.out.println("RMI setup complete.");
+		while (true)
+		{
+			try { Thread.sleep(TIMEOUT); }
+			catch (InterruptedException shutdown)
+			{
+				try
+				{
+					r.unbind(serviceName);
+					UnicastRemoteObject.unexportObject(users, true);
+					System.out.println("RMI shutdown complete.");
+				}
+				catch (NotBoundException | RemoteException ignored)
+				{
+					return;
+				}
+			}
+		}
 	}
 }
