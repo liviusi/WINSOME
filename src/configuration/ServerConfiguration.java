@@ -13,6 +13,10 @@ import java.util.Properties;
 public class ServerConfiguration extends Configuration
 {
 	public final int socketTimeout;
+	public final int corePoolSize;
+	public final int maximumPoolSize;
+	public final int keepAliveTime;
+	public final int threadPoolTimeout;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -30,13 +34,44 @@ public class ServerConfiguration extends Configuration
 		properties.load(fis);
 		fis.close();
 
-		if (properties.containsKey(Constants.SOCKETTIMEOUT_STRING))
+		if (properties.containsKey(Constants.SOCKETTIMEOUT_STRING) && properties.containsKey(Constants.COREPOOLSIZE_STRING) &&
+			properties.containsKey(Constants.MAXIMUMPOOLSIZE_STRING) && properties.containsKey(Constants.KEEPALIVETIME_STRING) &&
+			properties.containsKey(Constants.THREADPOOLTIMEOUT_STRING))
 		{
 			// validating socket timeout:
 			try
 			{
 				socketTimeout = Integer.parseInt(properties.getProperty(Constants.SOCKETTIMEOUT_STRING));
 				if (socketTimeout <= 0) throw new InvalidConfigException("Socket timeout must be greater than zero.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			// validating core pool size:
+			try
+			{
+				corePoolSize = Integer.parseInt(properties.getProperty(Constants.COREPOOLSIZE_STRING));
+				if (corePoolSize <= 0) throw new InvalidConfigException("Core pool size must be greater than zero.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			// validating maximum pool size:
+			try
+			{
+				maximumPoolSize = Integer.parseInt(properties.getProperty(Constants.MAXIMUMPOOLSIZE_STRING));
+				if (maximumPoolSize <= 0 || maximumPoolSize < corePoolSize) throw new InvalidConfigException("Maximum pool size must be greater than zero" + 
+					" and, at minimum, equal to core pool size.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			// validating keep alive time:
+			try
+			{
+				keepAliveTime = Integer.parseInt(properties.getProperty(Constants.KEEPALIVETIME_STRING));
+				if (keepAliveTime <= 0) throw new InvalidConfigException("Keep alive time must be greater than zero.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			// validating thread pool timeout:
+			try
+			{
+				threadPoolTimeout = Integer.parseInt(properties.getProperty(Constants.THREADPOOLTIMEOUT_STRING));
+				if (threadPoolTimeout <= 0) throw new InvalidConfigException("Thread pool timeout must be greater than zero.");
 			}
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			return;

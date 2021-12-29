@@ -11,6 +11,10 @@ public class Constants
 	static final String PORTNOREGISTRY_STRING = "REGISTRYPORT";
 	static final String SOCKETTIMEOUT_STRING = "SOCKETTIMEOUT";
 	static final String REGISTERSERVICENAME_STRING = "REGISTERSERVICENAME";
+	static final String COREPOOLSIZE_STRING = "COREPOOLSIZE";
+	static final String MAXIMUMPOOLSIZE_STRING = "MAXIMUMPOOLSIZE";
+	static final String KEEPALIVETIME_STRING = "KEEPALIVETIME";
+	static final String THREADPOOLTIMEOUT_STRING = "THREADPOOLTIMEOUT";
 
 	private Constants() { }
 
