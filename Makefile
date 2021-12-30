@@ -71,13 +71,16 @@ TARGETS = run-client run-server build
 .apicodes:
 	$(JC) $(CP) $(JFLAGS) src/api/CommandCode.java $(OUTPUTDIR)
 
-.api: .rmi-server .servconf .apiconstants .apicodes
+.clientapi: .rmi-server .servconf .apiconstants .apicodes
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
-.client: .api
+.serverapi: .user .userset
+	$(JC) $(CP) $(JFLAGS) src/server/API.java $(OUTPUTDIR)
+
+.client: .clientapi
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-.server: .servconf .psw .user .rmi-task
+.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .serverapi
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: .server .client
