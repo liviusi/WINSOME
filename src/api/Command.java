@@ -67,6 +67,6 @@ public class Command
 		String r = response.toString();
 		if (verbose)
 			System.out.println(r);
-		return r.endsWith(Constants.LOGIN_SUCCESS_POSTFIX);
+		return r.endsWith(Constants.LOGIN_SUCCESS);
 	}
 }
