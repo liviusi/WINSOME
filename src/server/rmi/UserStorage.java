@@ -9,7 +9,7 @@ import server.user.TagListTooLongException;
 
 public interface UserStorage extends Remote
 {
-	public boolean register(final String username, final String password, final Set<String> tags, final byte[] salt)
+	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
 		PasswordNotValidException, InvalidTagException, TagListTooLongException;
 }

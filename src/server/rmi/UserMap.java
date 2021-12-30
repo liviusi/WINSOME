@@ -9,8 +9,9 @@ import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -21,20 +22,20 @@ import com.google.gson.GsonBuilder;
 import cryptography.Passwords;
 import server.user.*;
 
-public class UserSet implements UserStorage
+public class UserMap implements UserStorage
 {
-	private Set<User> users = null;
+	private Map<String, User> users = null;
 	private ReadWriteLock lock = null;
 	private final static String EMPTY_STRING = "";
 	private final static int BUFFERSIZE = 1024;
 
-	public UserSet()
+	public UserMap()
 	{
-		users = new HashSet<>();
+		users = new HashMap<>();
 		lock = new ReentrantReadWriteLock();
 	}
 
-	public boolean register(final String username, final String password, final Set<String> tags, final byte[] salt)
+	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
 		PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
@@ -45,29 +46,28 @@ public class UserSet implements UserStorage
 		User u = new User(username, password, tags, salt);
 		try
 		{
-			lock.writeLock().lock();;
-			if (!users.add(u))
+			lock.writeLock().lock();
+			if (users.putIfAbsent(username, u) != null)
 				throw new UsernameAlreadyExistsException("Username has already been taken.");
 		}
 		finally { lock.writeLock().unlock(); }
-		return true;
 	}
 
-	public static UserSet fromJSON(File file)
+	public static UserMap fromJSON(File file)
 	{
 		return null;
 	}
 
 	public User getUser(String username)
 	{
+		User u = null;
 		try
 		{
 			lock.readLock().lock();
-			for (User u : users)
-				if (u.username.equals(username)) return u;
+			u = users.get(username);
 		}
 		finally { lock.readLock().unlock(); }
-		return null;
+		return u;
 	}
 
 	public void backupUsers(File file)
@@ -87,7 +87,7 @@ public class UserSet implements UserStorage
 			{
 				int i = 0;
 				writeChar(c, '[');
-				for (Iterator<User> it = users.iterator(); it.hasNext(); i++)
+				for (Iterator<User> it = users.values().iterator(); it.hasNext(); i++)
 				{
 					User u = it.next();
 					final byte[] data = gson.toJson(u).getBytes();
