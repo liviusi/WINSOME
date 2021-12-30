@@ -2,22 +2,36 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import api.CommandCode;
+import api.Constants;
+
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
+import server.API;
 import server.RMITask;
 import server.rmi.UserSet;
 import server.rmi.UserStorage;
+import server.user.InvalidLoginException;
+import server.user.WrongCredentialsException;
 
 /**
  * @brief Server file.
@@ -28,6 +42,152 @@ public class ServerMain
 {
 	public static final String USERS_FILENAME = "./storage/users.json";
 	public static final int BUFFERSIZE = 1024;
+
+	private static class SetElement
+	{
+		final SocketChannel client;
+		final int operation;
+		final ByteBuffer buffer;
+
+		public SetElement(final SocketChannel client, final int operation, final ByteBuffer buffer)
+		throws IllegalArgumentException
+		{
+			if (operation != SelectionKey.OP_READ && operation != SelectionKey.OP_WRITE)
+				throw new IllegalArgumentException("Operation specified is not valid. Only OP_READ and OP_WRITE are permitted.");
+			this.client = client;
+			this.operation = operation;
+			this.buffer = buffer;
+		}
+	}
+
+	private static class RequestHandler implements Runnable
+	{
+
+		private Set<SetElement> toBeRegistered = null;
+		private Selector selector = null;
+		private SelectionKey key = null;
+		private UserSet users = null;
+
+		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
+				final SelectionKey key, final UserSet users)
+		{
+			this.toBeRegistered = toBeRegistered;
+			this.selector = selector;
+			this.key = key;
+			this.users = users;
+		}
+
+		public void run()
+		{
+			ByteBuffer buffer = (ByteBuffer) key.attachment();
+			SocketChannel client = (SocketChannel) key.channel();
+			int nRead = 0;
+
+			buffer.flip();
+			buffer.clear();
+			try { nRead = client.read(buffer); }
+			catch (ClosedChannelException e) { return; }
+			catch (IOException e)
+			{
+				System.err.printf("I/O error occurred:\n%s\n", e.getMessage());
+				try { client.close(); }
+				catch (IOException ignored) { }
+				return;
+			}
+			if (nRead == -1) return;
+			else if (nRead == 0) return;
+			else // read has not failed:
+			{
+				buffer.flip();
+				final String message = StandardCharsets.UTF_8.decode(buffer).toString();
+				final String clientName;
+				try { clientName = client.getLocalAddress().toString(); }
+				catch (IOException e)
+				{
+					System.err.printf("I/O error occurred:\n%s\nNow removing client.\n", e.getMessage());
+					try { client.close(); }
+					catch (IOException ignored) { }
+					return;
+				}
+				if (message.equals(Constants.QUIT_STRING))
+				{
+					System.out.printf("client %s is now quitting.\n", clientName);
+					try { client.close(); }
+					catch (IOException ignored) { }
+					return;
+				}
+				System.out.printf("> client %s: \"%s\"\n", clientName, message);
+				String[] command = message.split(":");
+				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
+				{
+					// validate command syntax:
+					// "LOGIN:<username>:<hashPassword>"
+					if (command.length != 3) return;
+					buffer.flip();
+					buffer.clear();
+					boolean tmp = false;
+					try { API.handleLogin(users, client, command[1], command[2]); }
+					catch (InvalidLoginException | WrongCredentialsException e)
+					{
+						tmp = true;
+						buffer.put(e.getMessage().getBytes(StandardCharsets.UTF_8));
+					}
+					if (!tmp) buffer.put((command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8));
+					buffer.flip();
+				}
+				toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
+				selector.wakeup();
+				return;
+			}
+		}
+	}
+
+	private static class MessageDispatcher implements Runnable
+	{
+
+		private Set<SetElement> toBeRegistered = null;
+		private Selector selector = null;
+		private SelectionKey key = null;
+
+		public MessageDispatcher(final Set<SetElement> toBeRegistered, final Selector selector, final SelectionKey key)
+		{
+			this.toBeRegistered = toBeRegistered;
+			this.selector = selector;
+			this.key = key;
+		}
+
+		public void run()
+		{
+			SocketChannel client = (SocketChannel) key.channel();
+			ByteBuffer buffer = (ByteBuffer) key.attachment();
+
+			try { client.configureBlocking(false); }
+			catch (ClosedChannelException e)
+			{
+				try { client.close(); }
+				catch (IOException ignored) { }
+				return;
+			}
+			catch (IOException e)
+			{
+				try { client.close(); }
+				catch (IOException ignored) { }
+				return;
+			}
+			try { client.write(buffer); }
+			catch (ClosedChannelException e) { return; }
+			catch (IOException e)
+			{
+				System.err.printf("I/O error occurred:\n%s\nNow removing client.\n", e.getMessage());
+				try { client.close(); }
+				catch (IOException ignored) { }
+			}
+			buffer.clear();
+			toBeRegistered.add(new SetElement(client, SelectionKey.OP_READ, buffer));
+			selector.wakeup();
+			return;
+		}
+	}
 	public static void main(String[] args)
 	{
 
@@ -76,6 +236,7 @@ public class ServerMain
 			System.err.printf("Fatal I/O error occurred while setting up selector: now aborting...\n%s\n", e.getMessage());
 			System.exit(1);
 		}
+		Set<SetElement> toBeRegistered = ConcurrentHashMap.newKeySet();
 
 		// properly handling shutdown:
 		final Selector selectorHandler = selector;
@@ -118,7 +279,6 @@ public class ServerMain
 		});
 		System.out.println("Server is now running...");
 
-		
 		// select loop:
 		while (true)
 		{
@@ -133,7 +293,54 @@ public class ServerMain
 			if (!selector.isOpen()) break;
 			if (r == 0)
 			{
-				
+				if (!toBeRegistered.isEmpty())
+				{
+					for (final SetElement s : toBeRegistered)
+					{
+						try { s.client.register(selector, s.operation, s.buffer); }
+						catch (ClosedChannelException clientDisconnected) { }
+						toBeRegistered.remove(s);
+					}
+				}
+			}
+			final Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
+			while (keys.hasNext())
+			{
+				try
+				{
+					final SelectionKey k = keys.next();
+					keys.remove(); // remove from selected set
+					if (k.isAcceptable())
+					{
+						final ServerSocketChannel server = (ServerSocketChannel) k.channel();
+						SocketChannel client = null;
+						try
+						{
+							client = server.accept();
+							client.configureBlocking(false);
+
+							client.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(BUFFERSIZE));
+							System.out.println("New client accepted: " + client.getLocalAddress());
+						}
+						catch (ClosedChannelException clientDisconnected) { } // nothing to do
+						catch (IOException e)
+						{
+							System.err.printf("I/O error occurred:\n%s\n", e.getMessage());
+						}
+						continue;
+					}
+					if (k.isReadable())
+					{
+						k.cancel();
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserSet) users)));
+					}
+					if (k.isWritable())
+					{
+						k.cancel();
+						threadPool.execute(new Thread(new MessageDispatcher(toBeRegistered, selector, k)));
+					}
+				}
+				catch (CancelledKeyException e) { continue; }
 			}
 		}
 	}

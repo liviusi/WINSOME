@@ -7,8 +7,8 @@ import java.util.Set;
 
 public class User
 {
-	private final String username;
-	private final String hashPassword;
+	public final String username;
+	public final String hashPassword;
 	public final byte[] saltUsed;
 	private SocketChannel loggedIn;
 	private Set<Tag> tags = null;
