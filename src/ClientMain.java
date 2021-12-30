@@ -1,5 +1,7 @@
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.HashSet;
@@ -50,6 +52,18 @@ public class ClientMain
 			e.printStackTrace();
 			System.exit(1);
 		}
+		SocketChannel client = null;
+		try
+		{
+			client = SocketChannel.open(new InetSocketAddress(configuration.serverAddress, configuration.portNoTCP));
+			System.out.println("Connected to server successfully!");
+		}
+		catch (IOException e)
+		{
+			System.err.printf("I/O error occurred:\n%s\n", e.getMessage());
+			System.exit(1);
+		}
+	
 
 		System.out.println("Client is now running...");
 		Scanner scanner = new Scanner(System.in);
@@ -107,11 +121,14 @@ public class ClientMain
 						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
 						continue;
 					}
-					// Command.login(command[1], command[2], server, verbose)
-					System.out.println("Has yet to be implemented.");
+					try { Command.login(command[1], command[2], client, true); }
+					catch (IOException e) { break loop; }
 					continue;
 				}
 			}
+		System.out.println("Client is now freeing resources...");
 		scanner.close();
+		try { client.close(); }
+		catch (IOException ignored) { }
 	}
 }

@@ -32,21 +32,23 @@ public class Command
 		UserStorage service = (UserStorage) r.lookup(serviceName);
 		byte[] salt = Passwords.generateSalt();
 		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), salt);
-		if (verbose && service.register(username, hashedPassword, tags, salt))
-			System.out.println(username + " has now signed up.");
+		service.register(username, hashedPassword, tags, salt);
+		if (verbose) System.out.println(username + " has now signed up.");
 	}
 
+	// IT IS TO BE REDONE FROM SCRATCH
 	public static boolean login(String username, String password, SocketChannel server, boolean verbose)
 	throws IOException
 	{
 		if (username == null || password == null || server == null)
 			throw new NullPointerException("Parameter(s) cannot be null.");
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
-		buffer.put((CommandCode.LOGINSETUP + username).getBytes(StandardCharsets.UTF_8));
+		buffer.put((CommandCode.LOGINSETUP.getDescription() + username).getBytes(StandardCharsets.UTF_8));
 		buffer.flip();
 		while (buffer.hasRemaining())
 			server.write(buffer);
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		buffer.flip();
 		buffer.clear();
 		server.read(buffer);
 		buffer.flip();
@@ -54,8 +56,9 @@ public class Command
 			baos.write(buffer.get()); // reading salt
 		byte[] salt = baos.toByteArray();
 		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), salt);
+		System.out.println(hashedPassword);
 		buffer.clear();
-		buffer.put((CommandCode.LOGINATTEMPT + username + ":" + hashedPassword).getBytes(StandardCharsets.UTF_8));
+		buffer.put((CommandCode.LOGINATTEMPT.getDescription() + username + ":" + hashedPassword).getBytes(StandardCharsets.UTF_8));
 		buffer.flip();
 		while (buffer.hasRemaining())
 			server.write(buffer);

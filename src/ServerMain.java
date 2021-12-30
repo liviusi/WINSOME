@@ -28,7 +28,7 @@ import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
 import server.API;
 import server.RMITask;
-import server.rmi.UserSet;
+import server.rmi.UserMap;
 import server.rmi.UserStorage;
 import server.user.InvalidLoginException;
 import server.user.WrongCredentialsException;
@@ -66,10 +66,10 @@ public class ServerMain
 		private Set<SetElement> toBeRegistered = null;
 		private Selector selector = null;
 		private SelectionKey key = null;
-		private UserSet users = null;
+		private UserMap users = null;
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
-				final SelectionKey key, final UserSet users)
+				final SelectionKey key, final UserMap users)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
@@ -101,14 +101,7 @@ public class ServerMain
 				buffer.flip();
 				final String message = StandardCharsets.UTF_8.decode(buffer).toString();
 				final String clientName;
-				try { clientName = client.getLocalAddress().toString(); }
-				catch (IOException e)
-				{
-					System.err.printf("I/O error occurred:\n%s\nNow removing client.\n", e.getMessage());
-					try { client.close(); }
-					catch (IOException ignored) { }
-					return;
-				}
+				clientName = Integer.toString(client.hashCode());
 				if (message.equals(Constants.QUIT_STRING))
 				{
 					System.out.printf("client %s is now quitting.\n", clientName);
@@ -118,10 +111,11 @@ public class ServerMain
 				}
 				System.out.printf("> client %s: \"%s\"\n", clientName, message);
 				String[] command = message.split(":");
+
+				// "Login:<username>:<hashPassword>"
 				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
 				{
 					// validate command syntax:
-					// "LOGIN:<username>:<hashPassword>"
 					if (command.length != 3) return;
 					buffer.flip();
 					buffer.clear();
@@ -135,6 +129,19 @@ public class ServerMain
 					if (!tmp) buffer.put((command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8));
 					buffer.flip();
 				}
+				// "Login setup:<username>"
+				else if (command[0].equals(CommandCode.LOGINSETUP.getDescription()))
+				{
+					// validate command syntax:
+					if (command.length != 2) return;
+					buffer.flip();
+					buffer.clear();
+					final byte[] salt = API.handleLoginSetup(users, command[1]);
+					if (salt == null) buffer.put((command[1] + " has yet to sign up.").getBytes(StandardCharsets.UTF_8));
+					else buffer.put(salt);
+					buffer.flip();
+				}
+
 				toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
 				selector.wakeup();
 				return;
@@ -215,8 +222,8 @@ public class ServerMain
 		}
 
 		// setting up rmi:
-		UserStorage users = new UserSet();
-		Thread rmi = new Thread(new RMITask(configuration, (UserSet) users));
+		UserStorage users = new UserMap();
+		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users));
 		rmi.start();
 
 		// setting up multiplexing:
@@ -226,7 +233,7 @@ public class ServerMain
 		{
 			serverSocketChannel = ServerSocketChannel.open();
 			ServerSocket sSocket = serverSocketChannel.socket();
-			sSocket.bind(new InetSocketAddress(configuration.portNoTCP));
+			sSocket.bind(new InetSocketAddress(configuration.serverAddress, configuration.portNoTCP));
 			serverSocketChannel.configureBlocking(false);
 			selector = Selector.open();
 			serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -243,7 +250,7 @@ public class ServerMain
 		final ExecutorService threadPool = new ThreadPoolExecutor(configuration.corePoolSize, configuration.maximumPoolSize, configuration.keepAliveTime,
 				TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
 		final ServerConfiguration configurationHandler = configuration;
-		final UserSet userSetHandler = (UserSet) users;
+		final UserMap userSetHandler = (UserMap) users;
 		Runtime.getRuntime().addShutdownHook(new Thread()
 		{
 			public void run()
@@ -332,7 +339,7 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserSet) users)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserMap) users)));
 					}
 					if (k.isWritable())
 					{

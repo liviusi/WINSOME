@@ -54,8 +54,6 @@ public class Configuration
 				serverAddress = InetAddress.getByName(properties.getProperty(Constants.SERVERADDRESS_STRING));
 				multicastAddress = InetAddress.getByName(properties.getProperty(Constants.MULTICASTADDRESS_STRING));
 				registryAddress = InetAddress.getByName(properties.getProperty(Constants.REGISTRYADDRESS_STRING));
-				if (serverAddress.equals(multicastAddress) || serverAddress.equals(registryAddress) || multicastAddress.equals(registryAddress))
-					throw new InvalidConfigException("The same address can be used only once.");
 
 				if (!multicastAddress.isMulticastAddress())
 					throw new InvalidConfigException("Specified multicast address is not in multicast range.");
