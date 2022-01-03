@@ -53,19 +53,19 @@ TARGETS = run-client run-server build
 .invname-exc:
 	$(JC) $(CP) $(JFLAGS) src/server/rmi/UsernameNotValidException.java $(OUTPUTDIR)
 
-.userstorage: .psw-exc .nameexists-exc .invname-exc .user
+.userrmistorage: .psw-exc .nameexists-exc .invname-exc .user
+	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserRMIStorage.java $(OUTPUTDIR)
+
+.userstorage: .user
 	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserStorage.java $(OUTPUTDIR)
 
-.usermap: .userstorage
+.usermap: .userstorage .userrmistorage
 	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserMap.java $(OUTPUTDIR)
 
 .backup: .usermap
 	$(JC) $(CP) $(JFLAGS) src/server/BackupTask.java $(OUTPUTDIR)
 
-.rmi-server: .user .usermap
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/PasswordNotValidException.java $(OUTPUTDIR)
-
-.rmi-task: .rmi-server
+.rmi-task: .user .usermap
 	$(JC) $(CP) $(JFLAGS) src/server/RMITask.java $(OUTPUTDIR)
 
 .apiconstants:
@@ -77,7 +77,7 @@ TARGETS = run-client run-server build
 .communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.clientapi: .rmi-server .servconf .apiconstants .apicodes .communication
+.clientapi: .servconf .apiconstants .apicodes .communication
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
 .serverapi: .user .usermap
