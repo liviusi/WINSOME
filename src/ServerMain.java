@@ -109,7 +109,7 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout((UserMap) users, client, username); }
+					try { API.handleLogout(users, client, username); }
 					catch (InvalidLogoutException ignored) { }
 				}
 				try { client.close(); }
@@ -136,14 +136,12 @@ public class ServerMain
 				{
 					// validate command syntax:
 					if (command.length != 3) return;
-					buffer.flip();
-					buffer.clear();
 					if (loggedInClients.containsKey(client))
 						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
 					else
 					{
 						boolean tmp = false;
-						try { API.handleLogin((UserMap) users, client, command[1], command[2]); }
+						try { API.handleLogin(users, client, command[1], command[2]); }
 						catch (InvalidLoginException | WrongCredentialsException e)
 						{
 							tmp = true;
@@ -161,24 +159,23 @@ public class ServerMain
 				{
 					// validate command syntax:
 					if (command.length != 2) return;
-					buffer.flip();
-					buffer.clear();
 					if (loggedInClients.containsKey(client))
 						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
 					else
 					{
-						final String salt = API.handleLoginSetup((UserMap) users, command[1]);
+						final String salt = API.handleLoginSetup(users, command[1]);
 						if (salt == null) bytes = (command[1] + " has yet to sign up.").getBytes(StandardCharsets.UTF_8);
 						else bytes = salt.getBytes(StandardCharsets.UTF_8);
 					}
 				}
+				// "Logout:<username>"
 				else if (command[0].equals(CommandCode.LOGOUT.getDescription()))
 				{
 					if (command.length != 2) return;
-					if (loggedInClients.containsKey(client))
+					if (loggedInClients.get(client).equals(command[1]))
 					{
 						boolean tmp = false;
-						try { API.handleLogout((UserMap) users, client, command[1]); }
+						try { API.handleLogout(users, client, command[1]); }
 						catch (InvalidLogoutException e)
 						{
 							tmp = true;
@@ -191,9 +188,17 @@ public class ServerMain
 						}
 					}
 					else bytes = Constants.LOGOUT_FAILURE.getBytes(StandardCharsets.UTF_8);
-					buffer.flip();
-					buffer.clear();
 				}
+				else if (command[0].equals(CommandCode.LISTUSERS.getDescription()))
+				{
+					if (command.length != 2) return;
+					if (loggedInClients.get(client).equals(command[1]))
+					{
+					}
+				}
+
+				buffer.flip();
+				buffer.clear();
 				buffer.putInt(bytes.length);
 				buffer.put(bytes);
 				buffer.flip();
@@ -235,7 +240,7 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout((UserMap) users, client, username); }
+					try { API.handleLogout(users, client, username); }
 					catch (InvalidLogoutException ignored) { }
 				}
 				try { client.close(); }
@@ -248,7 +253,7 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout((UserMap) users, client, username); }
+					try { API.handleLogout(users, client, username); }
 					catch (InvalidLogoutException ignored) { }
 				}
 				try { client.close(); }
@@ -414,12 +419,12 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserMap) users, loggedInClients)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, loggedInClients)));
 					}
 					if (k.isWritable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new MessageDispatcher(toBeRegistered, selector, k, (UserMap) users, loggedInClients)));
+						threadPool.execute(new Thread(new MessageDispatcher(toBeRegistered, selector, k, users, loggedInClients)));
 					}
 				}
 				catch (CancelledKeyException e) { continue; }

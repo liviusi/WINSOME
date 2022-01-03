@@ -62,4 +62,13 @@ public class User
 	{
 		return this.username.equals(u.username);
 	}
+
+	public Set<String> getTags()
+	{
+		Set<String> r = new HashSet<>();
+		if (tags.isEmpty()) return r;
+		for (Tag t: tags)
+			r.add(t.name);
+		return r;
+	}
 }

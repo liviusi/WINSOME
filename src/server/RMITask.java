@@ -8,7 +8,7 @@ import java.rmi.server.UnicastRemoteObject;
 
 import configuration.ServerConfiguration;
 import server.rmi.UserMap;
-import server.rmi.UserStorage;
+import server.rmi.UserRMIStorage;
 
 public class RMITask implements Runnable
 {
@@ -26,11 +26,11 @@ public class RMITask implements Runnable
 
 	public void run()
 	{
-		UserStorage stub = null;
+		UserRMIStorage stub = null;
 		Registry r = null;
 		try
 		{
-			stub = (UserStorage) UnicastRemoteObject.exportObject(users, 0);
+			stub = (UserRMIStorage) UnicastRemoteObject.exportObject(users, 0);
 			LocateRegistry.createRegistry(port);
 			r = LocateRegistry.getRegistry(port);
 			r.rebind(serviceName, stub);

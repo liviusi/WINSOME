@@ -4,7 +4,8 @@ public enum CommandCode
 {
 	LOGINSETUP("Login setup"),
 	LOGINATTEMPT("Login"),
-	LOGOUT("Logout");
+	LOGOUT("Logout"),
+	LISTUSERS("List users");
 
 	private String description;
 
