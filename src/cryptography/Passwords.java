@@ -3,6 +3,7 @@ package cryptography;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Base64;
 
 public class Passwords
 {
@@ -36,5 +37,15 @@ public class Passwords
 		byte[] salt = new byte[SALT_LEN];
 		synchronized(RANDOM) { RANDOM.nextBytes(salt); }
 		return salt;
+	}
+
+	public static byte[] decodeSalt(final String saltDecoded)
+	{
+		return Base64.getDecoder().decode(saltDecoded);
+	}
+
+	public static String encodeSalt(final byte[] saltEncoded)
+	{
+		return Base64.getEncoder().encodeToString(saltEncoded);
 	}
 }
