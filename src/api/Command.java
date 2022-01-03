@@ -1,6 +1,5 @@
 package api;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -36,40 +35,39 @@ public class Command
 		if (verbose) System.out.println(username + " has now signed up.");
 	}
 
-	// IT IS TO BE REDONE FROM SCRATCH
 	public static boolean login(String username, String password, SocketChannel server, boolean verbose)
 	throws IOException
 	{
 		if (username == null || password == null || server == null)
 			throw new NullPointerException("Parameter(s) cannot be null.");
+
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
-		buffer.put((CommandCode.LOGINSETUP.getDescription() + username).getBytes(StandardCharsets.UTF_8));
-		buffer.flip();
-		while (buffer.hasRemaining())
-			server.write(buffer);
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		buffer.flip();
-		buffer.clear();
-		server.read(buffer);
-		buffer.flip();
-		while (buffer.hasRemaining())
-			baos.write(buffer.get()); // reading salt
-		byte[] salt = baos.toByteArray();
-		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), salt);
-		System.out.println(hashedPassword);
-		buffer.clear();
-		buffer.put((CommandCode.LOGINATTEMPT.getDescription() + username + ":" + hashedPassword).getBytes(StandardCharsets.UTF_8));
-		buffer.flip();
-		while (buffer.hasRemaining())
-			server.write(buffer);
-		buffer.clear();
-		server.read(buffer);
-		StringBuilder response = new StringBuilder();
-		buffer.flip();
-		while (buffer.hasRemaining()) response.append((char) buffer.get());
-		String r = response.toString();
+		byte[] bytes = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.UTF_8);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		StringBuilder sb = new StringBuilder();
+		if (Communication.receive(server, buffer, sb) == -1) return false;
+		String saltDecoded = sb.toString();
+		System.out.println("salt: " + saltDecoded);
+		if (saltDecoded.endsWith(Constants.USER_NOT_REGISTERED) || saltDecoded.endsWith(Constants.CLIENT_ALREADY_LOGGED_IN))
+		{
+			if (verbose) System.out.println(saltDecoded);
+			return false;
+		}
+		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), Passwords.decodeSalt(saltDecoded));
+		System.out.println("hashedPassword: " + hashedPassword);
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.UTF_8);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receive(server, buffer, sb) == -1) return false;
+		String response = sb.toString();
 		if (verbose)
-			System.out.println(r);
-		return r.endsWith(Constants.LOGIN_SUCCESS);
+			System.out.println(response);
+		return response.endsWith(Constants.LOGIN_SUCCESS);
 	}
 }

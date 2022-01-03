@@ -9,6 +9,7 @@ import java.util.Scanner;
 import java.util.Set;
 
 import api.Command;
+import api.Constants;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
 import server.rmi.PasswordNotValidException;
@@ -24,10 +25,6 @@ import server.user.TagListTooLongException;
 
 public class ClientMain
 {
-	private static final String QUIT_STRING = ":q!";
-	private static final String HELP_STRING = "help";
-	private static final String REGISTER_STRING = "register";
-	private static final String LOGIN_STRING = "login";
 
 	public static void main(String[] args)
 	{
@@ -67,19 +64,22 @@ public class ClientMain
 
 		System.out.println("Client is now running...");
 		Scanner scanner = new Scanner(System.in);
+		String loggedInUsername = null;
+		boolean loggedIn = false;
 		loop:
 			while(true)
 			{
-				System.out.printf("> ");
+				if (!loggedIn) System.out.printf("> ");
+				else System.out.printf("%s> ", loggedInUsername);
 				String s = scanner.nextLine();
-				if (s.equalsIgnoreCase(QUIT_STRING)) break loop;
-				if (s.equalsIgnoreCase(HELP_STRING))
+				if (s.equalsIgnoreCase(Constants.QUIT_STRING)) break loop;
+				if (s.equalsIgnoreCase(Constants.HELP_STRING))
 				{
 					System.out.printf("register <username> <password> <tags>:\n\tRegister.\n");
 					continue;
 				}
 				String[] command = s.split(" ");
-				if (s.startsWith(REGISTER_STRING))
+				if (s.startsWith(Constants.REGISTER_STRING))
 				{
 					int len = command.length;
 					if (len < 3)
@@ -113,7 +113,7 @@ public class ClientMain
 					}
 					continue;
 				}
-				if (s.startsWith(LOGIN_STRING))
+				if (s.startsWith(Constants.LOGIN_STRING))
 				{
 					int len = command.length;
 					if (len < 3)
@@ -121,8 +121,18 @@ public class ClientMain
 						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
 						continue;
 					}
-					try { Command.login(command[1], command[2], client, true); }
-					catch (IOException e) { break loop; }
+					boolean tmp;
+					try { tmp = Command.login(command[1], command[2], client, true); }
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+					if (tmp && !loggedIn)
+					{
+						loggedIn = true;
+						loggedInUsername = command[1];
+					}
 					continue;
 				}
 			}

@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -19,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import api.CommandCode;
+import api.Communication;
 import api.Constants;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -27,10 +29,12 @@ import java.util.concurrent.ThreadPoolExecutor;
 import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
 import server.API;
+import server.BackupTask;
 import server.RMITask;
 import server.rmi.UserMap;
 import server.rmi.UserStorage;
 import server.user.InvalidLoginException;
+import server.user.InvalidLogoutException;
 import server.user.WrongCredentialsException;
 
 /**
@@ -62,19 +66,20 @@ public class ServerMain
 
 	private static class RequestHandler implements Runnable
 	{
-
 		private Set<SetElement> toBeRegistered = null;
 		private Selector selector = null;
 		private SelectionKey key = null;
-		private UserMap users = null;
+		private UserStorage users = null;
+		private Set<SocketChannel> loggedInClients = null;
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
-				final SelectionKey key, final UserMap users)
+				final SelectionKey key, final UserStorage users, Set<SocketChannel> loggedInClients)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
 			this.key = key;
 			this.users = users;
+			this.loggedInClients = loggedInClients;
 		}
 
 		public void run()
@@ -82,10 +87,12 @@ public class ServerMain
 			ByteBuffer buffer = (ByteBuffer) key.attachment();
 			SocketChannel client = (SocketChannel) key.channel();
 			int nRead = 0;
+			byte[] bytes = null;
+			StringBuilder sb = new StringBuilder();
 
 			buffer.flip();
 			buffer.clear();
-			try { nRead = client.read(buffer); }
+			try { nRead = Communication.receive(client, buffer, sb); }
 			catch (ClosedChannelException e) { return; }
 			catch (IOException e)
 			{
@@ -99,7 +106,7 @@ public class ServerMain
 			else // read has not failed:
 			{
 				buffer.flip();
-				final String message = StandardCharsets.UTF_8.decode(buffer).toString();
+				final String message = sb.toString();
 				final String clientName;
 				clientName = Integer.toString(client.hashCode());
 				if (message.equals(Constants.QUIT_STRING))
@@ -111,7 +118,6 @@ public class ServerMain
 				}
 				System.out.printf("> client %s: \"%s\"\n", clientName, message);
 				String[] command = message.split(":");
-
 				// "Login:<username>:<hashPassword>"
 				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
 				{
@@ -119,15 +125,23 @@ public class ServerMain
 					if (command.length != 3) return;
 					buffer.flip();
 					buffer.clear();
-					boolean tmp = false;
-					try { API.handleLogin(users, client, command[1], command[2]); }
-					catch (InvalidLoginException | WrongCredentialsException e)
+					if (loggedInClients.contains(client))
+						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
+					else
 					{
-						tmp = true;
-						buffer.put(e.getMessage().getBytes(StandardCharsets.UTF_8));
+						boolean tmp = false;
+						try { API.handleLogin((UserMap) users, client, command[1], command[2]); }
+						catch (InvalidLoginException | WrongCredentialsException e)
+						{
+							tmp = true;
+							bytes = e.getMessage().getBytes(StandardCharsets.UTF_8);
+						}
+						if (!tmp)
+						{
+							bytes = (command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8);
+							loggedInClients.add(client);
+						}
 					}
-					if (!tmp) buffer.put((command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8));
-					buffer.flip();
 				}
 				// "Login setup:<username>"
 				else if (command[0].equals(CommandCode.LOGINSETUP.getDescription()))
@@ -136,12 +150,39 @@ public class ServerMain
 					if (command.length != 2) return;
 					buffer.flip();
 					buffer.clear();
-					final byte[] salt = API.handleLoginSetup(users, command[1]);
-					if (salt == null) buffer.put((command[1] + " has yet to sign up.").getBytes(StandardCharsets.UTF_8));
-					else buffer.put(salt);
-					buffer.flip();
+					if (loggedInClients.contains(client))
+						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
+					else
+					{
+						final String salt = API.handleLoginSetup((UserMap) users, command[1]);
+						if (salt == null) bytes = (command[1] + " has yet to sign up.").getBytes(StandardCharsets.UTF_8);
+						else bytes = salt.getBytes(StandardCharsets.UTF_8);
+					}
 				}
-
+				else if (command[0].equals(CommandCode.LOGOUT.getDescription()))
+				{
+					if (command.length != 2) return;
+					if (loggedInClients.contains(client))
+					{
+						boolean tmp = false;
+						try { API.handleLogout((UserMap) users, client, command[1]); }
+						catch (InvalidLogoutException e)
+						{
+							tmp = true;
+							bytes = e.getMessage().getBytes(StandardCharsets.UTF_8);
+						}
+						if (!tmp)
+						{
+							bytes = Constants.LOGOUT_SUCCESS.getBytes(StandardCharsets.UTF_8);
+							loggedInClients.remove(client);
+						}
+					}
+					else bytes = Constants.LOGOUT_FAILURE.getBytes(StandardCharsets.UTF_8);
+				}
+				buffer.putInt(bytes.length);
+				buffer.put(bytes);
+				buffer.flip();
+				
 				toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
 				selector.wakeup();
 				return;
@@ -151,7 +192,6 @@ public class ServerMain
 
 	private static class MessageDispatcher implements Runnable
 	{
-
 		private Set<SetElement> toBeRegistered = null;
 		private Selector selector = null;
 		private SelectionKey key = null;
@@ -222,9 +262,19 @@ public class ServerMain
 		}
 
 		// setting up rmi:
-		UserStorage users = new UserMap();
+		UserStorage users = null;
+		try { users = UserMap.fromJSON(new File("./storage/users.json")); }
+		catch (FileNotFoundException e) { users = new UserMap(); }
+		catch (IOException e)
+		{
+			System.err.println("Fatal error occurred while parsing user storage: now aborting...");
+			e.printStackTrace();
+			System.exit(1);
+		}
 		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users));
 		rmi.start();
+		Thread backup = new Thread(new BackupTask(new File(USERS_FILENAME), (UserMap) users));
+		backup.start();
 
 		// setting up multiplexing:
 		ServerSocketChannel serverSocketChannel = null;
@@ -250,7 +300,6 @@ public class ServerMain
 		final ExecutorService threadPool = new ThreadPoolExecutor(configuration.corePoolSize, configuration.maximumPoolSize, configuration.keepAliveTime,
 				TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
 		final ServerConfiguration configurationHandler = configuration;
-		final UserMap userSetHandler = (UserMap) users;
 		Runtime.getRuntime().addShutdownHook(new Thread()
 		{
 			public void run()
@@ -278,14 +327,15 @@ public class ServerMain
 				}
 				catch (InterruptedException e) { threadPool.shutdownNow(); }
 				// storing users:
-				try { userSetHandler.backupUsers(new File(USERS_FILENAME)); }
-				catch (IOException e) { System.err.printf("I/O error occurred during shutdown:\n%s\n", e.getMessage()); }
+				try { backup.join(500); }
+				catch (InterruptedException e) { }
 				try { rmi.join(500); }
 				catch (InterruptedException e) { }
 			}
 		});
 		System.out.println("Server is now running...");
 
+		Set<SocketChannel> loggedInClients = ConcurrentHashMap.newKeySet();
 		// select loop:
 		while (true)
 		{
@@ -339,7 +389,7 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserMap) users)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, (UserMap) users, loggedInClients)));
 					}
 					if (k.isWritable())
 					{
