@@ -66,6 +66,7 @@ public class ClientMain
 		Scanner scanner = new Scanner(System.in);
 		String loggedInUsername = null;
 		boolean loggedIn = false;
+		int result = -1;
 		loop:
 			while(true)
 			{
@@ -116,22 +117,61 @@ public class ClientMain
 				if (s.startsWith(Constants.LOGIN_STRING))
 				{
 					int len = command.length;
-					if (len < 3)
+					if (len != 3)
 					{
 						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
 						continue;
 					}
-					boolean tmp;
-					try { tmp = Command.login(command[1], command[2], client, true); }
+					try { result = Command.login(command[1], command[2], client, true); }
 					catch (IOException e)
 					{
 						e.printStackTrace();
 						break loop;
 					}
-					if (tmp && !loggedIn)
+					if (result == -1)
+					{
+						System.err.println("Server has forcibly reset the connection.");
+						break loop;
+					}
+					if (result == 1 && !loggedIn)
 					{
 						loggedIn = true;
 						loggedInUsername = command[1];
+					}
+					continue;
+				}
+				if (s.startsWith(Constants.LOGOUT_STRING))
+				{
+					int len = command.length;
+					if (len != 1)
+					{
+						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
+						continue;
+					}
+					try
+					{
+						result = Command.logout(loggedInUsername, client, true);
+					}
+					catch (NullPointerException e)
+					{
+						if (loggedInUsername == null)
+							System.err.println("Client has yet to login.");
+						continue;
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+					if (result == -1)
+					{
+						System.err.println("Server has forcibly reset the connection.");
+						break loop;
+					}
+					if (result == 1)
+					{
+						loggedIn = false;
+						loggedInUsername = null;
 					}
 					continue;
 				}

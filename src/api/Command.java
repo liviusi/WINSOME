@@ -8,6 +8,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.Objects;
 import java.util.Set;
 
 import cryptography.Passwords;
@@ -35,7 +36,7 @@ public class Command
 		if (verbose) System.out.println(username + " has now signed up.");
 	}
 
-	public static boolean login(String username, String password, SocketChannel server, boolean verbose)
+	public static int login(String username, String password, SocketChannel server, boolean verbose)
 	throws IOException
 	{
 		if (username == null || password == null || server == null)
@@ -49,13 +50,13 @@ public class Command
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		StringBuilder sb = new StringBuilder();
-		if (Communication.receive(server, buffer, sb) == -1) return false;
+		if (Communication.receive(server, buffer, sb) == -1) return -1;
 		String saltDecoded = sb.toString();
 		System.out.println("salt: " + saltDecoded);
 		if (saltDecoded.endsWith(Constants.USER_NOT_REGISTERED) || saltDecoded.endsWith(Constants.CLIENT_ALREADY_LOGGED_IN))
 		{
 			if (verbose) System.out.println(saltDecoded);
-			return false;
+			return 0;
 		}
 		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), Passwords.decodeSalt(saltDecoded));
 		System.out.println("hashedPassword: " + hashedPassword);
@@ -64,10 +65,33 @@ public class Command
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
-		if (Communication.receive(server, buffer, sb) == -1) return false;
+		if (Communication.receive(server, buffer, sb) == -1) return -1;
 		String response = sb.toString();
 		if (verbose)
 			System.out.println(response);
-		return response.endsWith(Constants.LOGIN_SUCCESS);
+		if (response.endsWith(Constants.LOGIN_SUCCESS)) return 1;
+		else return 0;
+	}
+
+	public static int logout(String username, SocketChannel server, boolean verbose)
+	throws IOException
+	{
+		Objects.requireNonNull(username, "Username cannot be null.");
+		Objects.requireNonNull(server, "Server cannot be null.");
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.UTF_8);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		StringBuilder sb = new StringBuilder();
+		if (Communication.receive(server, buffer, sb) == -1) return -1;
+		String response = sb.toString();
+		if (verbose)
+			System.out.println(response);
+		if (response.endsWith(Constants.LOGOUT_SUCCESS)) return 1;
+		else return 0;
 	}
 }

@@ -14,6 +14,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -70,10 +71,10 @@ public class ServerMain
 		private Selector selector = null;
 		private SelectionKey key = null;
 		private UserStorage users = null;
-		private Set<SocketChannel> loggedInClients = null;
+		private Map<SocketChannel, String> loggedInClients = null;
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
-				final SelectionKey key, final UserStorage users, Set<SocketChannel> loggedInClients)
+				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
@@ -89,6 +90,7 @@ public class ServerMain
 			int nRead = 0;
 			byte[] bytes = null;
 			StringBuilder sb = new StringBuilder();
+			String username = null;
 
 			buffer.flip();
 			buffer.clear();
@@ -101,7 +103,18 @@ public class ServerMain
 				catch (IOException ignored) { }
 				return;
 			}
-			if (nRead == -1) return;
+			if (nRead == -1) // client forcibly disconnected
+			{
+				username = loggedInClients.get(client);
+				if (username != null)
+				{
+					loggedInClients.remove(client);
+					try { API.handleLogout((UserMap) users, client, username); }
+					catch (InvalidLogoutException ignored) { }
+				}
+				try { client.close(); }
+				catch (IOException ignored) { }
+			}
 			else if (nRead == 0) return;
 			else // read has not failed:
 			{
@@ -125,7 +138,7 @@ public class ServerMain
 					if (command.length != 3) return;
 					buffer.flip();
 					buffer.clear();
-					if (loggedInClients.contains(client))
+					if (loggedInClients.containsKey(client))
 						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
 					else
 					{
@@ -139,7 +152,7 @@ public class ServerMain
 						if (!tmp)
 						{
 							bytes = (command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8);
-							loggedInClients.add(client);
+							loggedInClients.put(client, command[1]);
 						}
 					}
 				}
@@ -150,7 +163,7 @@ public class ServerMain
 					if (command.length != 2) return;
 					buffer.flip();
 					buffer.clear();
-					if (loggedInClients.contains(client))
+					if (loggedInClients.containsKey(client))
 						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
 					else
 					{
@@ -162,7 +175,7 @@ public class ServerMain
 				else if (command[0].equals(CommandCode.LOGOUT.getDescription()))
 				{
 					if (command.length != 2) return;
-					if (loggedInClients.contains(client))
+					if (loggedInClients.containsKey(client))
 					{
 						boolean tmp = false;
 						try { API.handleLogout((UserMap) users, client, command[1]); }
@@ -173,11 +186,13 @@ public class ServerMain
 						}
 						if (!tmp)
 						{
-							bytes = Constants.LOGOUT_SUCCESS.getBytes(StandardCharsets.UTF_8);
+							bytes = (command[1] + Constants.LOGOUT_SUCCESS).getBytes(StandardCharsets.UTF_8);
 							loggedInClients.remove(client);
 						}
 					}
 					else bytes = Constants.LOGOUT_FAILURE.getBytes(StandardCharsets.UTF_8);
+					buffer.flip();
+					buffer.clear();
 				}
 				buffer.putInt(bytes.length);
 				buffer.put(bytes);
@@ -195,37 +210,47 @@ public class ServerMain
 		private Set<SetElement> toBeRegistered = null;
 		private Selector selector = null;
 		private SelectionKey key = null;
+		private UserStorage users = null;
+		private Map<SocketChannel, String> loggedInClients = null;
 
-		public MessageDispatcher(final Set<SetElement> toBeRegistered, final Selector selector, final SelectionKey key)
+		public MessageDispatcher(final Set<SetElement> toBeRegistered, final Selector selector,
+				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
 			this.key = key;
+			this.loggedInClients = loggedInClients;
 		}
 
 		public void run()
 		{
 			SocketChannel client = (SocketChannel) key.channel();
 			ByteBuffer buffer = (ByteBuffer) key.attachment();
+			String username = null;
 
 			try { client.configureBlocking(false); }
-			catch (ClosedChannelException e)
-			{
-				try { client.close(); }
-				catch (IOException ignored) { }
-				return;
-			}
 			catch (IOException e)
 			{
+				username = loggedInClients.get(client);
+				if (username != null)
+				{
+					loggedInClients.remove(client);
+					try { API.handleLogout((UserMap) users, client, username); }
+					catch (InvalidLogoutException ignored) { }
+				}
 				try { client.close(); }
 				catch (IOException ignored) { }
-				return;
 			}
 			try { client.write(buffer); }
-			catch (ClosedChannelException e) { return; }
-			catch (IOException e)
+			catch (IOException e) // client forcibly disconnected
 			{
-				System.err.printf("I/O error occurred:\n%s\nNow removing client.\n", e.getMessage());
+				username = loggedInClients.get(client);
+				if (username != null)
+				{
+					loggedInClients.remove(client);
+					try { API.handleLogout((UserMap) users, client, username); }
+					catch (InvalidLogoutException ignored) { }
+				}
 				try { client.close(); }
 				catch (IOException ignored) { }
 			}
@@ -335,7 +360,7 @@ public class ServerMain
 		});
 		System.out.println("Server is now running...");
 
-		Set<SocketChannel> loggedInClients = ConcurrentHashMap.newKeySet();
+		Map<SocketChannel, String> loggedInClients = new ConcurrentHashMap<>();
 		// select loop:
 		while (true)
 		{
@@ -394,7 +419,7 @@ public class ServerMain
 					if (k.isWritable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new MessageDispatcher(toBeRegistered, selector, k)));
+						threadPool.execute(new Thread(new MessageDispatcher(toBeRegistered, selector, k, (UserMap) users, loggedInClients)));
 					}
 				}
 				catch (CancelledKeyException e) { continue; }
