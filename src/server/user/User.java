@@ -1,7 +1,7 @@
 package server.user;
 
 import java.nio.channels.SocketChannel;
-import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -9,7 +9,7 @@ public class User
 {
 	public final String username;
 	public final String hashPassword;
-	public final byte[] saltUsed;
+	public final String saltDecoded;
 	private SocketChannel loggedIn;
 	private Set<Tag> tags = null;
 	private static final int MAXIMUM_TAG_SET_SIZE = 5;
@@ -30,7 +30,7 @@ public class User
 		}
 		if (this.tags.size() > MAXIMUM_TAG_SET_SIZE)
 			throw new TagListTooLongException("No more than 5 different tags can be chosen.");
-		this.saltUsed = Arrays.copyOf(saltUsed, saltUsed.length);
+		this.saltDecoded = Base64.getEncoder().encodeToString(saltUsed);
 		this.loggedIn = null;
 	}
 
