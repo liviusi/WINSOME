@@ -2,9 +2,9 @@ package api;
 
 public enum CommandCode
 {
-	LOGINSETUP("Login setup:"),
-	LOGINATTEMPT("Login:"),
-	LOGOUT("Logout:");
+	LOGINSETUP("Login setup"),
+	LOGINATTEMPT("Login"),
+	LOGOUT("Logout");
 
 	private String description;
 
