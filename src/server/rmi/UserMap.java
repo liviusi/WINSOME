@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -32,7 +33,7 @@ import com.google.gson.stream.JsonReader;
 import cryptography.Passwords;
 import server.user.*;
 
-public class UserMap implements UserStorage
+public class UserMap implements UserRMIStorage, UserStorage
 {
 	private Map<String, User> users = null; // already backed up
 	private Map<String, User> toBeBackedUp = null;
@@ -213,6 +214,31 @@ public class UserMap implements UserStorage
 			toBeBackedUp = new HashMap<>();
 		}
 		finally { lock.writeLock().unlock(); }
+	}
+
+	public Set<String> getAllUsersWithSameInterestsAs(String username)
+	{
+		Set<String> r = new HashSet<>();
+		User u = null;
+		try
+		{
+			lock.readLock().lock();
+			u = users.get(username);
+			if (u == null) return r;
+			Set<String> uTags = u.getTags();
+			for (Entry<String, User> entry: users.entrySet())
+			{
+				if (entry.getKey().equals(username)) continue;
+				User tmp = entry.getValue();
+				Set<String> tmpTags = tmp.getTags();
+				int size = tmpTags.size();
+				tmpTags.removeAll(uTags);
+				if (size != tmpTags.size()) // there was at least a common tag
+					r.add(tmp.username);
+			}
+		}
+		finally { lock.readLock().unlock(); }
+		return r;
 	}
 
 	/**

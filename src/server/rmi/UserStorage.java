@@ -1,15 +1,18 @@
 package server.rmi;
 
-import java.rmi.Remote;
-import java.rmi.RemoteException;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Set;
 
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
+import server.user.User;
 
-public interface UserStorage extends Remote
+public interface UserStorage
 {
-	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
-	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException, TagListTooLongException;
+	public User getUser(String username);
+
+	public void backupUsers(File file)
+	throws FileNotFoundException, IOException;
+
+	public Set<String> getAllUsersWithSameInterestsAs(String username);
 }
