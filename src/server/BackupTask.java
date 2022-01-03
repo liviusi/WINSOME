@@ -1,0 +1,38 @@
+package server;
+
+import java.io.File;
+import java.io.IOException;
+
+import server.rmi.UserMap;
+
+public class BackupTask implements Runnable
+{
+	public static final int SLEEPINGTIME = 5000; // milliseconds to be spent sleeping
+
+	private final File usersFile;
+	private UserMap users = null;
+
+	public BackupTask(File usersFile, UserMap users)
+	{
+		if (usersFile == null || users == null)
+			throw new NullPointerException("Constructor parameters cannot be null.");
+		this.usersFile = usersFile;
+		this.users = users;
+
+	}
+
+	public void run()
+	{
+		while (true)
+		{
+			try { Thread.sleep(SLEEPINGTIME); }
+			catch (InterruptedException shouldTerminate) { return; }
+			try { users.backupUsers(usersFile); }
+			catch (IOException e)
+			{
+				System.err.printf("Fatal error occurred in BackupTask:\n%s\n", e.getMessage());
+				System.exit(1);
+			}
+		}
+	}
+}
