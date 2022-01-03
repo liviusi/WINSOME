@@ -14,15 +14,6 @@ Soluzione proposta per il progetto di Laboratorio di Reti.
 ├── LICENSE
 ├── Makefile
 ├── README.md
-├── Soluzione dellesercizio-20211214
-│   ├── Client.class
-│   ├── Client.java
-│   ├── Server.class
-│   ├── Server.java
-│   ├── UserList.class
-│   ├── UserListInterface.class
-│   ├── UserListInterface.java
-│   └── UserList.java
 ├── src
 │   ├── api
 │   │   ├── CommandCode.java
