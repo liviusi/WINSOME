@@ -34,12 +34,6 @@ public class User
 		this.loggedIn = null;
 	}
 
-	public boolean addTag(Tag tag)
-	{
-		if (tag == null) throw new NullPointerException("Null tag cannot be followed.");
-		return tags.add(tag);
-	}
-
 	public void login(SocketChannel client, String hashPassword)
 	throws InvalidLoginException, WrongCredentialsException
 	{
