@@ -14,10 +14,20 @@ Soluzione proposta per il progetto di Laboratorio di Reti.
 ├── LICENSE
 ├── Makefile
 ├── README.md
+├── Soluzione dellesercizio-20211214
+│   ├── Client.class
+│   ├── Client.java
+│   ├── Server.class
+│   ├── Server.java
+│   ├── UserList.class
+│   ├── UserListInterface.class
+│   ├── UserListInterface.java
+│   └── UserList.java
 ├── src
 │   ├── api
 │   │   ├── CommandCode.java
 │   │   ├── Command.java
+│   │   ├── Communication.java
 │   │   └── Constants.java
 │   ├── ClientMain.java
 │   ├── configuration
@@ -29,11 +39,12 @@ Soluzione proposta per il progetto di Laboratorio di Reti.
 │   │   └── Passwords.java
 │   ├── server
 │   │   ├── API.java
+│   │   ├── BackupTask.java
 │   │   ├── rmi
 │   │   │   ├── PasswordNotValidException.java
+│   │   │   ├── UserMap.java
 │   │   │   ├── UsernameAlreadyExistsException.java
 │   │   │   ├── UsernameNotValidException.java
-│   │   │   ├── UserSet.java
 │   │   │   └── UserStorage.java
 │   │   ├── RMITask.java
 │   │   └── user
@@ -46,4 +57,5 @@ Soluzione proposta per il progetto di Laboratorio di Reti.
 │   │       └── WrongCredentialsException.java
 │   └── ServerMain.java
 └── storage
+    └── users.json
 ```
