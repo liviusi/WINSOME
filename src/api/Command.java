@@ -13,7 +13,7 @@ import java.util.Set;
 
 import cryptography.Passwords;
 import server.rmi.PasswordNotValidException;
-import server.rmi.UserStorage;
+import server.rmi.UserRMIStorage;
 import server.rmi.UsernameAlreadyExistsException;
 import server.rmi.UsernameNotValidException;
 import server.user.InvalidTagException;
@@ -29,7 +29,7 @@ public class Command
 		if (username == null || password == null || tags == null || serviceName == null)
 			throw new NullPointerException("Parameter(s) cannot be null.");
 		Registry r = LocateRegistry.getRegistry(portNo);
-		UserStorage service = (UserStorage) r.lookup(serviceName);
+		UserRMIStorage service = (UserRMIStorage) r.lookup(serviceName);
 		byte[] salt = Passwords.generateSalt();
 		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), salt);
 		service.register(username, hashedPassword, tags, salt);
