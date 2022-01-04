@@ -74,10 +74,13 @@ TARGETS = run-client run-server build
 .apicodes:
 	$(JC) $(CP) $(JFLAGS) src/api/CommandCode.java $(OUTPUTDIR)
 
+.rc:
+	$(JC) $(CP) $(JFLAGS) src/api/ResponseCode.java $(OUTPUTDIR)
+
 .communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.clientapi: .servconf .apiconstants .apicodes .communication
+.clientapi: .servconf .apiconstants .apicodes .communication .rc
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
 .serverapi: .user .usermap
@@ -86,7 +89,7 @@ TARGETS = run-client run-server build
 .client: .clientapi
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .serverapi .backup .communication
+.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .serverapi .backup .communication .rc
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: .server .client
