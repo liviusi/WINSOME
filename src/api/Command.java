@@ -1,6 +1,7 @@
 package api;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +32,7 @@ public class Command
 		Registry r = LocateRegistry.getRegistry(portNo);
 		UserRMIStorage service = (UserRMIStorage) r.lookup(serviceName);
 		byte[] salt = Passwords.generateSalt();
-		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), salt);
+		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), salt);
 		service.register(username, hashedPassword, tags, salt);
 		if (verbose) System.out.println(username + " has now signed up.");
 	}
@@ -44,32 +45,33 @@ public class Command
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
+		Response r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.UTF_8);
+		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		StringBuilder sb = new StringBuilder();
 		if (Communication.receive(server, buffer, sb) == -1) return -1;
-		String saltDecoded = sb.toString();
-		System.out.println("salt: " + saltDecoded);
-		if (saltDecoded.endsWith(Constants.USER_NOT_REGISTERED) || saltDecoded.endsWith(Constants.CLIENT_ALREADY_LOGGED_IN))
+		r = Response.ParseAnswer(sb.toString());
+		if (r.code.getValue() != ResponseCode.OK.getValue())
 		{
-			if (verbose) System.out.println(saltDecoded);
+			printIf(System.out, r, verbose);
 			return 0;
 		}
-		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.UTF_8), Passwords.decodeSalt(saltDecoded));
+		String saltDecoded = r.body;
+		System.out.println("salt: " + saltDecoded);
+		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		System.out.println("hashedPassword: " + hashedPassword);
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.UTF_8);
+		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
 		if (Communication.receive(server, buffer, sb) == -1) return -1;
-		String response = sb.toString();
-		if (verbose)
-			System.out.println(response);
-		if (response.endsWith(Constants.LOGIN_SUCCESS)) return 1;
+		r = Response.ParseAnswer(sb.toString());
+		printIf(System.out, r, verbose);
+		if (r.code.getValue() == ResponseCode.OK.getValue()) return 1;
 		else return 0;
 	}
 
@@ -83,7 +85,7 @@ public class Command
 		byte[] bytes = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.UTF_8);
+		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		StringBuilder sb = new StringBuilder();
@@ -93,5 +95,62 @@ public class Command
 			System.out.println(response);
 		if (response.endsWith(Constants.LOGOUT_SUCCESS)) return 1;
 		else return 0;
+	}
+
+	public static int listUsers(String username, SocketChannel server, boolean verbose, Set<String> dest)
+	throws IOException
+	{
+		Objects.requireNonNull(username, "Username cannot be null.");
+		Objects.requireNonNull(server, "Server cannot be null.");
+		Objects.requireNonNull(dest, "Set cannot be null.");
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.LISTUSERS.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		return 0;
+	}
+
+	private static class Response
+	{
+		public final ResponseCode code;
+		public final String body;
+
+		private Response(ResponseCode code, String body)
+		{
+			this.code = code;
+			this.body = body;
+		}
+
+		private static Response ParseAnswer(String str)
+		{
+			System.out.println(str);
+			int code = -1;
+			try
+			{
+				code = Integer.parseInt(str.split(" ", 2)[0]);
+			}
+			catch (NumberFormatException e)
+			{
+				return null;
+			}
+			System.out.println("code = " + code);
+			int index = str.indexOf("\r\n") + 1;
+			if (index == -1) return null;
+			String body = str.substring(index + 1);
+			return new Response(ResponseCode.fromCode(code), body);
+		}
+	}
+
+	private static void printIf(PrintStream stream, Response toPrint, boolean flag)
+	{
+		if (flag)
+		{
+			stream.println(toPrint.code.getDescription());
+			stream.println(toPrint.body);
+		}
 	}
 }
