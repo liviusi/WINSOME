@@ -1,8 +1,10 @@
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.ClosedChannelException;
@@ -23,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import api.CommandCode;
 import api.Communication;
 import api.Constants;
+import api.ResponseCode;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -88,9 +91,14 @@ public class ServerMain
 			ByteBuffer buffer = (ByteBuffer) key.attachment();
 			SocketChannel client = (SocketChannel) key.channel();
 			int nRead = 0;
-			byte[] bytes = null;
+			int size = BUFFERSIZE;
+			ByteArrayOutputStream answerConstructor = new ByteArrayOutputStream();
 			StringBuilder sb = new StringBuilder();
 			String username = null;
+			String message = null;
+			String clientName = null;
+			boolean exceptionCaught = false;
+			Set<String> listUsers = null;
 
 			buffer.flip();
 			buffer.clear();
@@ -119,8 +127,8 @@ public class ServerMain
 			else // read has not failed:
 			{
 				buffer.flip();
-				final String message = sb.toString();
-				final String clientName;
+				buffer.clear();
+				message = sb.toString();
 				clientName = Integer.toString(client.hashCode());
 				if (message.equals(Constants.QUIT_STRING))
 				{
@@ -135,21 +143,50 @@ public class ServerMain
 				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
 				{
 					// validate command syntax:
-					if (command.length != 3) return;
+					if (command.length != 3)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
 					if (loggedInClients.containsKey(client))
-						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
+					{
+						try
+						{
+							answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+							answerConstructor.write(Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
 					else
 					{
-						boolean tmp = false;
 						try { API.handleLogin(users, client, command[1], command[2]); }
 						catch (InvalidLoginException | WrongCredentialsException e)
 						{
-							tmp = true;
-							bytes = e.getMessage().getBytes(StandardCharsets.UTF_8);
+							exceptionCaught = true;
+							try
+							{
+								answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 						}
-						if (!tmp)
+						catch (NullPointerException e)
 						{
-							bytes = (command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.UTF_8);
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + Constants.USER_NOT_REGISTERED).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+						if (!exceptionCaught)
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + Constants.LOGIN_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 							loggedInClients.put(client, command[1]);
 						}
 					}
@@ -158,14 +195,41 @@ public class ServerMain
 				else if (command[0].equals(CommandCode.LOGINSETUP.getDescription()))
 				{
 					// validate command syntax:
-					if (command.length != 2) return;
+					if (command.length != 2)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
 					if (loggedInClients.containsKey(client))
-						bytes = Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.UTF_8);
+					{
+						try
+						{
+							answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+							answerConstructor.write(Constants.CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
 					else
 					{
 						final String salt = API.handleLoginSetup(users, command[1]);
-						if (salt == null) bytes = (command[1] + " has yet to sign up.").getBytes(StandardCharsets.UTF_8);
-						else bytes = salt.getBytes(StandardCharsets.UTF_8);
+						if (salt == null)
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + Constants.USER_NOT_REGISTERED).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+						else
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write(salt.getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
 					}
 				}
 				// "Logout:<username>"
@@ -174,33 +238,63 @@ public class ServerMain
 					if (command.length != 2) return;
 					if (loggedInClients.get(client).equals(command[1]))
 					{
-						boolean tmp = false;
 						try { API.handleLogout(users, client, command[1]); }
 						catch (InvalidLogoutException e)
 						{
-							tmp = true;
-							bytes = e.getMessage().getBytes(StandardCharsets.UTF_8);
+							exceptionCaught = true;
+							try
+							{
+								answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 						}
-						if (!tmp)
+						if (!exceptionCaught)
 						{
-							bytes = (command[1] + Constants.LOGOUT_SUCCESS).getBytes(StandardCharsets.UTF_8);
+							try
+							{
+								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + Constants.LOGOUT_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 							loggedInClients.remove(client);
 						}
 					}
-					else bytes = Constants.LOGOUT_FAILURE.getBytes(StandardCharsets.UTF_8);
+					else
+					{
+						try
+						{
+							answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+							answerConstructor.write(Constants.CLIENT_NOT_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
 				}
 				else if (command[0].equals(CommandCode.LISTUSERS.getDescription()))
 				{
 					if (command.length != 2) return;
 					if (loggedInClients.get(client).equals(command[1]))
 					{
+						listUsers = API.handleListUser(users, command[1]);
+						try
+						{
+							answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+							size = SetToByteArray(listUsers, answerConstructor);
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
+					else
+					{
+						try
+						{
+							answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+							answerConstructor.write((command[1] + Constants.CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 					}
 				}
 
-				buffer.flip();
-				buffer.clear();
-				buffer.putInt(bytes.length);
-				buffer.put(bytes);
+				putByteArray(buffer, size, answerConstructor.toByteArray());
 				buffer.flip();
 				
 				toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
@@ -208,6 +302,62 @@ public class ServerMain
 				return;
 			}
 		}
+
+		private static <T> int SetToByteArray(Set<T> set, ByteArrayOutputStream dst)
+		throws IOException
+		{
+			int size = BUFFERSIZE;
+			ByteBuffer buffer = ByteBuffer.allocate(size);
+			byte[] tmp = null;
+			for (T item: set)
+			{
+				tmp = item.toString().getBytes(StandardCharsets.US_ASCII);
+				size = putByteArray(buffer, size, tmp);
+			}
+			byte[] array = new byte[buffer.position()];
+			buffer.flip();
+			buffer.get(array);
+			dst.write(array);
+			return size;
+		}
+
+		private static int putByteArray(ByteBuffer dst, int buffersize, byte[] src)
+		{
+			ByteBuffer tmp = null;
+			int newSize = buffersize;
+			while (true)
+			{
+				try
+				{
+					dst.putInt(src.length);
+					break;
+				}
+				catch (BufferOverflowException e)
+				{
+					newSize *= 2;
+					tmp = ByteBuffer.allocate(newSize);
+					tmp.put(dst);
+					dst = tmp;
+				}
+			}
+			while (true)
+			{
+				try
+				{
+					dst.put(src);
+					break;
+				}
+				catch (BufferOverflowException e)
+				{
+					newSize *= 2;
+					tmp = ByteBuffer.allocate(newSize);
+					tmp.put(dst);
+					dst = tmp;
+				}
+			}
+			return newSize;
+		}
+
 	}
 
 	private static class MessageDispatcher implements Runnable
