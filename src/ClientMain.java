@@ -66,6 +66,7 @@ public class ClientMain
 		Scanner scanner = new Scanner(System.in);
 		String loggedInUsername = null;
 		boolean loggedIn = false;
+		Set<String> resultSet = null;
 		int result = -1;
 		loop:
 			while(true)
@@ -174,6 +175,26 @@ public class ClientMain
 						loggedInUsername = null;
 					}
 					continue;
+				}
+				if (s.equals(Constants.LIST_USERS_STRING))
+				{
+					resultSet = new HashSet<>();
+					try { result = Command.listUsers(loggedInUsername, client, true, resultSet); }
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+				}
+				if (result == -1)
+				{
+					System.err.println("Server has forcibly reset the connection.");
+					break loop;
+				}
+				if (result == 1)
+				{
+					for (String u: resultSet)
+						System.out.println(u);
 				}
 			}
 		System.out.println("Client is now freeing resources...");

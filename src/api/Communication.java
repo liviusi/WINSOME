@@ -6,13 +6,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import java.util.Set;
 
 public class Communication
 {
 	private Communication() { }
 
-	public static int receive(SocketChannel src, ByteBuffer buffer, StringBuilder dst)
+	public static int receiveMessage(SocketChannel src, ByteBuffer buffer, StringBuilder dst)
 	throws IOException
 	{
 		Objects.requireNonNull(src, "SocketChannel cannot be null.");
@@ -36,7 +35,7 @@ public class Communication
 		return nRead;
 	}
 
-	public static int receiveSet(SocketChannel src, ByteBuffer buffer, Set<String> dst)
+	public static int receiveBytes(SocketChannel src, ByteBuffer buffer, ByteArrayOutputStream dst)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(src, "SocketChannel cannot be null.");
@@ -45,7 +44,6 @@ public class Communication
 		int r = 0;
 		int nRead = 0;
 		int size = -1;
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		do
 		{
 			r = src.read(buffer);
@@ -55,44 +53,10 @@ public class Communication
 			buffer.flip();
 			if (size == -1)
 				size = buffer.getInt();
-			baos.write(buffer.array());
+			while (buffer.hasRemaining())
+				dst.write(buffer.get());
 			buffer.clear();
 		} while (nRead < size || size < 0);
-		byte[] bytes = baos.toByteArray();
-		byte[] tmp = null;
-		ByteBuffer converter = ByteBuffer.allocate(Integer.BYTES);
-		StringBuilder sb = null;
-		int strlen = -1;
-		int i = 0;
-		while (i < bytes.length)
-		{
-			if (strlen > 0)
-			{
-				sb = new StringBuilder();
-				for (int j = 0; j < strlen; j++)
-				{
-					char c = (char) bytes[i + j];
-					sb.append(c);
-				}
-				String str = sb.toString();
-				dst.add(str);
-				System.out.println(str);
-				i += strlen;
-				strlen = -1;
-			}
-			else
-			{
-				tmp = new byte[Integer.BYTES];
-				for (int j = 0; j < Integer.BYTES; j++)
-					tmp[j] = bytes[i + j];
-				converter.put(tmp);
-				converter.flip();
-				strlen = converter.getInt();
-				converter.flip();
-				converter.clear();
-				i += Integer.BYTES;
-			}
-		}
 		return nRead;
 	}
 

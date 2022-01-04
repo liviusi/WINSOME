@@ -102,7 +102,7 @@ public class ServerMain
 
 			buffer.flip();
 			buffer.clear();
-			try { nRead = Communication.receive(client, buffer, sb); }
+			try { nRead = Communication.receiveMessage(client, buffer, sb); }
 			catch (ClosedChannelException e) { return; }
 			catch (IOException e)
 			{

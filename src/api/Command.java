@@ -1,5 +1,6 @@
 package api;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
@@ -23,55 +24,56 @@ import server.user.TagListTooLongException;
 public class Command
 {
 
+	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
+
 	public static void register(String username, String password, Set<String> tags, int portNo, String serviceName, boolean verbose)
 	throws RemoteException, NotBoundException, NullPointerException, UsernameNotValidException, UsernameAlreadyExistsException,
 			PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
-		if (username == null || password == null || tags == null || serviceName == null)
-			throw new NullPointerException("Parameter(s) cannot be null.");
 		Registry r = LocateRegistry.getRegistry(portNo);
-		UserRMIStorage service = (UserRMIStorage) r.lookup(serviceName);
+		UserRMIStorage service = (UserRMIStorage) r.lookup(Objects.requireNonNull(serviceName, "Service to search for cannot be null."));
 		byte[] salt = Passwords.generateSalt();
-		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), salt);
-		service.register(username, hashedPassword, tags, salt);
+		String hashedPassword = Passwords.hashPassword(Objects.requireNonNull(password, "Password cannot be null.").getBytes(StandardCharsets.US_ASCII), salt);
+		service.register(Objects.requireNonNull(username, "Username cannot be null."), hashedPassword, Objects.requireNonNull(tags, "Tags cannot be null."), salt);
 		if (verbose) System.out.println(username + " has now signed up.");
 	}
 
 	public static int login(String username, String password, SocketChannel server, boolean verbose)
 	throws IOException
 	{
-		if (username == null || password == null || server == null)
-			throw new NullPointerException("Parameter(s) cannot be null.");
+		Objects.requireNonNull(username, "Username cannot be null.");
+		Objects.requireNonNull(password, "Password cannot be null.");
+		Objects.requireNonNull(server, "Server channel cannot be null.");
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
-		Response r = null;
+		Response<String> r = null;
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		StringBuilder sb = new StringBuilder();
-		if (Communication.receive(server, buffer, sb) == -1) return -1;
-		r = Response.ParseAnswer(sb.toString());
-		if (r.code.getValue() != ResponseCode.OK.getValue())
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code != ResponseCode.OK)
 		{
 			printIf(System.out, r, verbose);
 			return 0;
 		}
 		String saltDecoded = r.body;
-		System.out.println("salt: " + saltDecoded);
 		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
-		System.out.println("hashedPassword: " + hashedPassword);
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
-		if (Communication.receive(server, buffer, sb) == -1) return -1;
-		r = Response.ParseAnswer(sb.toString());
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
 		printIf(System.out, r, verbose);
-		if (r.code.getValue() == ResponseCode.OK.getValue()) return 1;
+		if (r.code == ResponseCode.OK) return 1;
 		else return 0;
 	}
 
@@ -83,17 +85,18 @@ public class Command
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
+		Response<String> r = null;
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		StringBuilder sb = new StringBuilder();
-		if (Communication.receive(server, buffer, sb) == -1) return -1;
-		String response = sb.toString();
-		if (verbose)
-			System.out.println(response);
-		if (response.endsWith(Constants.LOGOUT_SUCCESS)) return 1;
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		printIf(System.out, r, verbose);
+		if (r.code == ResponseCode.OK) return 1;
 		else return 0;
 	}
 
@@ -106,50 +109,31 @@ public class Command
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LISTUSERS.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
-		return 0;
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
+		r = Response.parseAnswer(baos.toByteArray());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (verbose)
+		{
+			System.out.printf("Code: %s", r.code.getDescription());
+		}
+		if (r.code != ResponseCode.OK) return 0;
+		for (String s: r.body)
+			dest.add(s);
+		return 1;
 	}
 
-	private static class Response
-	{
-		public final ResponseCode code;
-		public final String body;
-
-		private Response(ResponseCode code, String body)
-		{
-			this.code = code;
-			this.body = body;
-		}
-
-		private static Response ParseAnswer(String str)
-		{
-			System.out.println(str);
-			int code = -1;
-			try
-			{
-				code = Integer.parseInt(str.split(" ", 2)[0]);
-			}
-			catch (NumberFormatException e)
-			{
-				return null;
-			}
-			System.out.println("code = " + code);
-			int index = str.indexOf("\r\n") + 1;
-			if (index == -1) return null;
-			String body = str.substring(index + 1);
-			return new Response(ResponseCode.fromCode(code), body);
-		}
-	}
-
-	private static void printIf(PrintStream stream, Response toPrint, boolean flag)
+	private static void printIf(PrintStream stream, Response<String> toPrint, boolean flag)
 	{
 		if (flag)
 		{
-			stream.println(toPrint.code.getDescription());
+			stream.printf("Code: %s", toPrint.code.getDescription());
 			stream.println(toPrint.body);
 		}
 	}
