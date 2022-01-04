@@ -77,10 +77,13 @@ TARGETS = run-client run-server build
 .rc:
 	$(JC) $(CP) $(JFLAGS) src/api/ResponseCode.java $(OUTPUTDIR)
 
+.response: .rc
+	$(JC) $(CP) $(JFLAGS) src/api/Response.java $(OUTPUTDIR)
+
 .communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.clientapi: .servconf .apiconstants .apicodes .communication .rc
+.clientapi: .servconf .apiconstants .apicodes .communication .rc .response
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
 .serverapi: .user .usermap
