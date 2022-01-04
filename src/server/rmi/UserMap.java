@@ -56,7 +56,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 	{
 		if (username == null || password == null || tags == null || salt == null) throw new NullPointerException("Parameters cannot be null");
 		if (username.isEmpty()) throw new UsernameNotValidException("Username cannot be empty.");
-		String emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.UTF_8), salt);
+		String emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.US_ASCII), salt);
 		if (emptyStringHashed.equals(password)) throw new PasswordNotValidException("Password cannot be empty.");
 		User u = new User(username, password, tags, salt);
 		try
@@ -173,7 +173,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 						else
 							line = line + "\n";
 						buffer.clear();
-						final byte[] data = line.getBytes(StandardCharsets.UTF_8);
+						final byte[] data = line.getBytes(StandardCharsets.US_ASCII);
 						buffer.put(data);
 						buffer.flip();
 						while (buffer.hasRemaining()) c.write(buffer);
@@ -225,12 +225,12 @@ public class UserMap implements UserRMIStorage, UserStorage
 			lock.readLock().lock();
 			u = users.get(username);
 			if (u == null) return r;
-			Set<String> uTags = u.getTags();
+			Set<Tag> uTags = u.getTags();
 			for (Entry<String, User> entry: users.entrySet())
 			{
 				if (entry.getKey().equals(username)) continue;
 				User tmp = entry.getValue();
-				Set<String> tmpTags = tmp.getTags();
+				Set<Tag> tmpTags = tmp.getTags();
 				int size = tmpTags.size();
 				tmpTags.removeAll(uTags);
 				if (size != tmpTags.size()) // there was at least a common tag
@@ -250,7 +250,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 	throws IOException
 	{
 		CharBuffer charBuffer = CharBuffer.wrap(new char[]{c});
-		ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(charBuffer);
+		ByteBuffer byteBuffer = StandardCharsets.US_ASCII.encode(charBuffer);
 		// Leggo il contenuto del buffer e lo scrivo sul canale.
 		channel.write(byteBuffer);
 	}
