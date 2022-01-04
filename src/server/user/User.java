@@ -3,6 +3,7 @@ package server.user;
 import java.nio.channels.SocketChannel;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public class User
@@ -18,25 +19,23 @@ public class User
 	public User(final String username, final String hashPassword, Set<String> tags, final byte[] saltUsed)
 	throws NullPointerException, InvalidTagException, TagListTooLongException
 	{
-		if (username == null || hashPassword == null || tags == null || saltUsed == null)
-			throw new NullPointerException("Constructor parameters cannot be null.");
-		this.username = username;
-		this.hashPassword = hashPassword;
+		Objects.requireNonNull(tags, "Tags cannot be null.");
+		this.username = Objects.requireNonNull(username, "Username cannot be null.");
+		this.hashPassword = Objects.requireNonNull(hashPassword, "Hashed password cannot be null.");
 		this.tags = new HashSet<>();
 		for (String t : tags)
-		{
-			if (t == null) throw new NullPointerException("Tag cannot be null.");
 			this.tags.add(new Tag(t));
-		}
 		if (this.tags.size() > MAXIMUM_TAG_SET_SIZE)
 			throw new TagListTooLongException("No more than 5 different tags can be chosen.");
-		this.saltDecoded = Base64.getEncoder().encodeToString(saltUsed);
+		this.saltDecoded = Base64.getEncoder().encodeToString(Objects.requireNonNull(saltUsed, "Salt cannot be null."));
 		this.loggedIn = null;
 	}
 
 	public void login(SocketChannel client, String hashPassword)
 	throws InvalidLoginException, WrongCredentialsException
 	{
+		Objects.requireNonNull(client, "Client cannot be null.");
+		Objects.requireNonNull(hashPassword, "Hashed password cannot be null.");
 		synchronized(this)
 		{
 			if (this.loggedIn != null)

@@ -3,25 +3,18 @@ package api;
 public enum ResponseCode
 {
 
-	OK(200, "200 OK!\r\n"),
-	CREATED(201, "201 Created!\r\n"),
-	BAD_REQUEST(400, "400 Bad request!\r\n"),
-	FORBIDDEN(403, "403 Forbidden!\r\n"),
-	NOT_FOUND(404, "404 Not found!\r\n");
+	OK("200\r\n"),
+	CREATED("201\r\n"),
+	BAD_REQUEST("400\r\n"),
+	FORBIDDEN("403\r\n"),
+	NOT_FOUND("404\r\n");
 
-	private int value = -1;
 	private String description = null;
 	
 
-	private ResponseCode(int value, String description)
+	private ResponseCode(String description)
 	{
-		this.value = value;
 		this.description = description;
-	}
-
-	public int getValue()
-	{
-		return value;
 	}
 
 	public String getDescription()
