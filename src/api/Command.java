@@ -25,6 +25,7 @@ public class Command
 {
 
 	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
+	private static final String NULL_ERROR = " cannot be null.";
 
 	public static void register(String username, String password, Set<String> tags, int portNo, String serviceName, boolean verbose)
 	throws RemoteException, NotBoundException, NullPointerException, UsernameNotValidException, UsernameAlreadyExistsException,
@@ -41,19 +42,22 @@ public class Command
 	public static int login(String username, String password, SocketChannel server, boolean verbose)
 	throws IOException
 	{
-		Objects.requireNonNull(username, "Username cannot be null.");
-		Objects.requireNonNull(password, "Password cannot be null.");
-		Objects.requireNonNull(server, "Server channel cannot be null.");
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(password, "Password" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server channel" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
+		StringBuilder sb = null;
+		String saltDecoded = null;
+		String hashedPassword = null;
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
-		StringBuilder sb = new StringBuilder();
+		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
@@ -62,8 +66,8 @@ public class Command
 			printIf(System.out, r, verbose);
 			return 0;
 		}
-		String saltDecoded = r.body;
-		String hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
+		saltDecoded = r.body;
+		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -80,18 +84,19 @@ public class Command
 	public static int logout(String username, SocketChannel server, boolean verbose)
 	throws IOException
 	{
-		Objects.requireNonNull(username, "Username cannot be null.");
-		Objects.requireNonNull(server, "Server cannot be null.");
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
+		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
-		StringBuilder sb = new StringBuilder();
+		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
@@ -103,9 +108,9 @@ public class Command
 	public static int listUsers(String username, SocketChannel server, boolean verbose, Set<String> dest)
 	throws IOException
 	{
-		Objects.requireNonNull(username, "Username cannot be null.");
-		Objects.requireNonNull(server, "Server cannot be null.");
-		Objects.requireNonNull(dest, "Set cannot be null.");
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
@@ -129,12 +134,36 @@ public class Command
 		return 1;
 	}
 
+	public static int followUser(String follower, String followed, SocketChannel server, boolean verbose)
+	throws IOException
+	{
+		Objects.requireNonNull(follower, "Username" + NULL_ERROR);
+		Objects.requireNonNull(followed, "User to be followed's username" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.FOLLOWUSER.getDescription() + Constants.DELIMITER + follower + Constants.DELIMITER + followed).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		printIf(System.out, r, verbose);
+		if (r.code == ResponseCode.OK) return 1;
+		else return 0;
+	}
+
 	private static void printIf(PrintStream stream, Response<String> toPrint, boolean flag)
 	{
 		if (flag)
 		{
-			stream.printf("Code: %s", toPrint.code.getDescription());
-			stream.println(toPrint.body);
+			stream.printf("< Code: %s", toPrint.code.getDescription());
+			stream.println("< "+ toPrint.body);
 		}
 	}
 }

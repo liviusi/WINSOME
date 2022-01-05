@@ -14,6 +14,7 @@ public class User
 	private SocketChannel loggedIn;
 	private Set<Tag> tags = null;
 	private static final int MAXIMUM_TAG_SET_SIZE = 5;
+	private Set<String> following = null;
 
 
 	public User(final String username, final String hashPassword, Set<String> tags, final byte[] saltUsed)
@@ -29,6 +30,7 @@ public class User
 			throw new TagListTooLongException("No more than 5 different tags can be chosen.");
 		this.saltDecoded = Base64.getEncoder().encodeToString(Objects.requireNonNull(saltUsed, "Salt cannot be null."));
 		this.loggedIn = null;
+		this.following = new HashSet<>();
 	}
 
 	public void login(SocketChannel client, String hashPassword)
@@ -67,5 +69,19 @@ public class User
 		Set<Tag> r = new HashSet<>();
 		synchronized(this) { r.addAll(tags); }
 		return r;
+	}
+
+	public boolean follow(User u)
+	{
+		Objects.requireNonNull(u, "User cannot be null");
+		if (u.equals(this)) throw new IllegalArgumentException("A user cannot follow themselves.");
+		return following.add(u.username);
+	}
+
+	public Set<String> getFollowing()
+	{
+		Set<String> res = new HashSet<>();
+		synchronized(this) { res.addAll(following); }
+		return res;
 	}
 }

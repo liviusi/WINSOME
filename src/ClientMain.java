@@ -25,6 +25,7 @@ import server.user.TagListTooLongException;
 
 public class ClientMain
 {
+	private static String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
 
 	public static void main(String[] args)
 	{
@@ -131,7 +132,7 @@ public class ClientMain
 					}
 					if (result == -1)
 					{
-						System.err.println("Server has forcibly reset the connection.");
+						System.err.println(SERVER_DISCONNECT);
 						break loop;
 					}
 					if (result == 1 && !loggedIn)
@@ -156,7 +157,7 @@ public class ClientMain
 					catch (NullPointerException e)
 					{
 						if (loggedInUsername == null)
-							System.err.println("Client has yet to login.");
+							System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
 						continue;
 					}
 					catch (IOException e)
@@ -166,7 +167,7 @@ public class ClientMain
 					}
 					if (result == -1)
 					{
-						System.err.println("Server has forcibly reset the connection.");
+						System.err.println(SERVER_DISCONNECT);
 						break loop;
 					}
 					if (result == 1)
@@ -185,16 +186,38 @@ public class ClientMain
 						e.printStackTrace();
 						break loop;
 					}
+					if (result == -1)
+					{
+						System.err.println(SERVER_DISCONNECT);
+						break loop;
+					}
+					else if (result == 1)
+					{
+						String[] tmp = null;
+						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+						System.out.println("< -------------------------------------------------------------------------------");
+						for (String u: resultSet)
+						{
+							tmp = u.split("\r\n");
+							System.out.println(String.format("< %30s %25s %10s", tmp[0], "|", tmp[1]));
+						}
+					}
+					continue;
 				}
-				if (result == -1)
+				if (command[0].equals(Constants.FOLLOW_USER_STRING))
 				{
-					System.err.println("Server has forcibly reset the connection.");
-					break loop;
-				}
-				if (result == 1)
-				{
-					for (String u: resultSet)
-						System.out.println(u);
+					try { result = Command.followUser(loggedInUsername, command[1], client, true); }
+					catch (NullPointerException e)
+					{
+						if (loggedInUsername == null)
+							System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+						continue;
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
 				}
 			}
 		System.out.println("Client is now freeing resources...");

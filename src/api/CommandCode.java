@@ -5,7 +5,8 @@ public enum CommandCode
 	LOGINSETUP("Login setup"),
 	LOGINATTEMPT("Login"),
 	LOGOUT("Logout"),
-	LISTUSERS("List users");
+	LISTUSERS("List users"),
+	FOLLOWUSER("Follow");
 
 	private String description;
 

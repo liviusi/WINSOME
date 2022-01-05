@@ -20,12 +20,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.Map.Entry;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.google.gson.ExclusionStrategy;
+import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
@@ -35,17 +38,17 @@ import server.user.*;
 
 public class UserMap implements UserRMIStorage, UserStorage
 {
-	private Map<String, User> users = null; // already backed up
-	private Map<String, User> toBeBackedUp = null;
+	private Map<String, User> usersBackedUp = null; // already backed up
+	private Map<String, User> usersToBeBackedUp = null;
 	private ReadWriteLock lock = null;
 	private boolean flag = false;
-	private final static String EMPTY_STRING = "";
-	private final static int BUFFERSIZE = 1024;
+	private static final String EMPTY_STRING = "";
+	private static final int BUFFERSIZE = 1024;
 
 	public UserMap()
 	{
-		users = new HashMap<>();
-		toBeBackedUp = new HashMap<>();
+		usersBackedUp = new HashMap<>();
+		usersToBeBackedUp = new HashMap<>();
 		flag = false;
 		lock = new ReentrantReadWriteLock();
 	}
@@ -62,18 +65,19 @@ public class UserMap implements UserRMIStorage, UserStorage
 		try
 		{
 			lock.writeLock().lock();
-			if (toBeBackedUp.containsKey(username) || users.containsKey(username)) // username already exists
+			if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
 				throw new UsernameAlreadyExistsException("Username has already been taken.");
-			toBeBackedUp.put(username, u);
+			usersToBeBackedUp.put(username, u);
 		}
 		finally { lock.writeLock().unlock(); }
 	}
 
-	public static UserMap fromJSON(File file) throws FileNotFoundException, IOException
+	public static UserMap fromJSON(final File usersFile, final File followingFile)
+	throws FileNotFoundException, IOException
 	{
 		UserMap map = new UserMap();
 		map.flag = true;
-		InputStream is = new FileInputStream(file);
+		InputStream is = new FileInputStream(usersFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
 		reader.setLenient(true);
 		reader.beginArray();
@@ -122,45 +126,94 @@ public class UserMap implements UserRMIStorage, UserStorage
 				}
 			}
 			reader.endObject();
-			try { map.users.put(username, new User(username, hashPassword, tags, saltDecoded)); }
+			try { map.usersBackedUp.put(username, new User(username, hashPassword, tags, saltDecoded)); }
 			catch (InvalidTagException | TagListTooLongException doNotAddUser) { }
 		}
 		reader.endArray();
 		reader.close();
+		is.close();
+
+		is = new FileInputStream(followingFile);
+		reader = new JsonReader(new InputStreamReader(is));
+		reader.setLenient(true);
+		reader.beginArray();
+		while (reader.hasNext())
+		{
+			reader.beginObject();
+			String name = null;
+			String username = null;
+			Set<String> following = new HashSet<>();
+			for (int i = 0; i < 2; i++)
+			{
+				name = reader.nextName();
+				if (name.equals("username"))
+					username = reader.nextString();
+				else if (name.equals("following"))
+				{
+					reader.beginArray();
+					while (reader.hasNext())
+						following.add(reader.nextString());
+					reader.endArray();
+				}
+				for (String s: following)
+					map.addFollower(username, s);
+			}
+			reader.endObject();
+		}
+		reader.endArray();
+		reader.close();
+		is.close();
 		return map;
 	}
 
-	public User getUser(String username)
+	public User getUser(final String username)
 	{
 		User u = null;
 		try
 		{
 			lock.readLock().lock();
-			u = users.get(username);
+			u = usersBackedUp.get(username);
 			if (u == null)
-				u = toBeBackedUp.get(username);
+				u = usersToBeBackedUp.get(username);
 		}
 		finally { lock.readLock().unlock(); }
 		return u;
 	}
 
-	public void backupUsers(File file)
+	public void backupUsers(final File usersFile)
 	throws FileNotFoundException, IOException
 	{
+		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy()
+		{
+			@Override
+			public boolean shouldSkipField(FieldAttributes f)
+			{
+				return f.getDeclaringClass() == User.class && f.getName().equals("following");
+			}
+
+			@Override
+			public boolean shouldSkipClass(Class<?> clazz)
+			{
+				return false;
+			}
+		}).create();
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		File tmp = new File("tmp-users.json");
+		byte[] data = null;
+		int i = 0;
+		Path from = null;
+		Path to = null;
 		try
 		{
 			lock.writeLock().lock();
-			if (toBeBackedUp.isEmpty()) return;
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
-			if (!(users.isEmpty()) || flag)
+			if (usersToBeBackedUp.isEmpty()) return;
+			if (!(usersBackedUp.isEmpty()) || flag)
 			{
 				flag = false;
 				// delete last character
-				File tmp = new File("tmp-users.json");
 				try
 				(
-					final Scanner scanner = new Scanner(file);
+					final Scanner scanner = new Scanner(usersFile);
 					final FileOutputStream fos = new FileOutputStream(tmp);
 					final FileChannel c = fos.getChannel()
 				)
@@ -173,32 +226,81 @@ public class UserMap implements UserRMIStorage, UserStorage
 						else
 							line = line + "\n";
 						buffer.clear();
-						final byte[] data = line.getBytes(StandardCharsets.US_ASCII);
+						data = line.getBytes(StandardCharsets.US_ASCII);
 						buffer.put(data);
 						buffer.flip();
 						while (buffer.hasRemaining()) c.write(buffer);
 					}
 				}
 				// replace file:
-				Path from = tmp.toPath();
-				Path to = file.toPath();
+				from = tmp.toPath();
+				to = usersFile.toPath();
 				Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
 				Files.delete(from);
 			}
 			try
 			(
-				final FileOutputStream fos = new FileOutputStream(file, true);
+				final FileOutputStream fos = new FileOutputStream(usersFile, true);
 				final FileChannel c = fos.getChannel()
 			)
 			{
-				int i = 0;
-				if (users.isEmpty()) writeChar(c, '[');
+				if (usersBackedUp.isEmpty()) writeChar(c, '[');
 				else writeChar(c, ',');
-				for (Iterator<User> it = toBeBackedUp.values().iterator(); it.hasNext(); i++)
+				for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
 				{
 					User u = it.next();
-					System.out.println(u + " username: " + u.username);
-					users.put(u.username, u);
+					usersBackedUp.put(u.username, u);
+					data = gson.toJson(u).getBytes();
+					for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
+					{
+						buffer.clear();
+						buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
+						buffer.flip();
+						while (buffer.hasRemaining()) c.write(buffer);
+					}
+					if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
+				}
+				writeChar(c, ']');
+			}
+			usersToBeBackedUp = new HashMap<>();
+		}
+		finally { lock.writeLock().unlock(); }
+	}
+
+	public void backupFollowing(File followingFile)
+	throws FileNotFoundException, IOException
+	{
+		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy()
+		{
+			@Override
+			public boolean shouldSkipField(FieldAttributes f)
+			{
+				return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
+						!f.getName().equals("username");
+			}
+
+			@Override
+			public boolean shouldSkipClass(Class<?> clazz)
+			{
+				return false;
+			}
+			
+		}).create();
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		int i = 0;
+		try
+		{
+			lock.readLock().lock();
+			try
+			(
+				final FileOutputStream fos = new FileOutputStream(followingFile, false);
+				final FileChannel c = fos.getChannel()
+			)
+			{
+				writeChar(c, '[');
+				for (Iterator<User> it = usersBackedUp.values().iterator(); it.hasNext(); i++)
+				{
+					User u = it.next();
 					final byte[] data = gson.toJson(u).getBytes();
 					for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
 					{
@@ -207,26 +309,25 @@ public class UserMap implements UserRMIStorage, UserStorage
 						buffer.flip();
 						while (buffer.hasRemaining()) c.write(buffer);
 					}
-					if (i < toBeBackedUp.size() - 1) writeChar(c, ',');
+					if (i < usersBackedUp.size() - 1) writeChar(c, ',');
 				}
 				writeChar(c, ']');
 			}
-			toBeBackedUp = new HashMap<>();
 		}
-		finally { lock.writeLock().unlock(); }
+		finally { lock.readLock().unlock(); }
 	}
 
-	public Set<String> getAllUsersWithSameInterestsAs(String username)
+	public Set<String> getAllUsersWithSameInterestsAs(final String username)
 	{
 		Set<String> r = new HashSet<>();
 		User u = null;
 		try
 		{
 			lock.readLock().lock();
-			u = users.get(username);
+			u = usersBackedUp.get(username);
 			if (u == null) return r;
 			Set<Tag> uTags = u.getTags();
-			for (Entry<String, User> entry: users.entrySet())
+			for (Entry<String, User> entry: usersBackedUp.entrySet())
 			{
 				if (entry.getKey().equals(username)) continue;
 				User tmp = entry.getValue();
@@ -234,11 +335,38 @@ public class UserMap implements UserRMIStorage, UserStorage
 				int size = tmpTags.size();
 				tmpTags.removeAll(uTags);
 				if (size != tmpTags.size()) // there was at least a common tag
-					r.add(tmp.username);
+				{
+					Set<String> tmpSet = new HashSet<>();
+					tmp.getTags().forEach(t -> tmpSet.add(t.name));
+					r.add(tmp.username + "\r\n" + String.join(", ", tmpSet));
+				}
 			}
 		}
 		finally { lock.readLock().unlock(); }
 		return r;
+	}
+
+	public boolean addFollower(final String followerUsername, final String followedUsername)
+	{
+		final String NULL_PARAM_ERROR = " user's username cannot be null.";
+		final String NO_USER_ERROR = "No user could be found for given name: ";
+		User followerUser = null;
+		User followedUser = null;
+		boolean result = false;
+		
+		try
+		{
+			lock.writeLock().lock();
+			followerUser = usersBackedUp.get(Objects.requireNonNull(followerUsername, "Follower" + NULL_PARAM_ERROR));
+			followedUser = usersBackedUp.get(Objects.requireNonNull(followedUsername, "Followed" + NULL_PARAM_ERROR));
+			if (followerUser == null)
+				throw new IllegalArgumentException(NO_USER_ERROR + followerUsername);
+			if (followedUser == null)
+				throw new IllegalArgumentException(NO_USER_ERROR + followedUsername);
+			result = followerUser.follow(followedUser);
+		}
+		finally { lock.writeLock().unlock(); }
+		return result;
 	}
 
 	/**

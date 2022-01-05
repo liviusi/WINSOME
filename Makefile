@@ -8,13 +8,10 @@ OUTPUTDIR = -d ./bin
 
 TARGETS = run-client run-server build
 
-.confconstants:
-	$(JC) $(CP) $(JFLAGS) src/configuration/Constants.java $(OUTPUTDIR)
-
 .conf-exc:
 	$(JC) $(CP) $(JFLAGS) src/configuration/InvalidConfigException.java $(OUTPUTDIR)
 
-.baseconf: .confconstants .conf-exc
+.baseconf: .conf-exc
 	$(JC) $(CP) $(JFLAGS) src/configuration/Configuration.java $(OUTPUTDIR)
 
 .servconf: .baseconf

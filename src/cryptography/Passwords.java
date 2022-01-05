@@ -4,6 +4,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Objects;
 
 public class Passwords
 {
@@ -23,10 +24,12 @@ public class Passwords
 
 	public static String hashPassword(final byte[] password, final byte[] salt)
 	{
+		Objects.requireNonNull(password, "Password cannot be null.");
+		Objects.requireNonNull(salt, "Salt cannot be null.");
 		String s = null;
 		MessageDigest md = null;
 		try { md = MessageDigest.getInstance("SHA-256"); }
-		catch (NoSuchAlgorithmException neverThrown) { throw new RuntimeException("Unexpected error occurred. " + neverThrown.getMessage()); }
+		catch (NoSuchAlgorithmException neverThrown) { throw new IllegalStateException("Unexpected error occurred. " + neverThrown.getMessage()); }
 		md.update(salt);
 		s = bytesToString(md.digest(password));
 		return s;

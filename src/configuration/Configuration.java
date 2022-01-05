@@ -10,6 +10,15 @@ import java.util.Properties;
 
 public class Configuration
 {
+	private static final String SERVERADDRESS_STRING = "SERVERADDRESS";
+	private static final String PORTNOTCP_STRING = "TCPPORT";
+	private static final String PORTNOUDP_STRING = "UDPPORT";
+	private static final String MULTICASTADDRESS_STRING = "MULTICASTADDRESS";
+	private static final String PORTNOMULTICAST_STRING = "MULTICASTPORT";
+	private static final String REGISTRYADDRESS_STRING = "REGISTRYHOST";
+	private static final String PORTNOREGISTRY_STRING = "REGISTRYPORT";
+	private static final String REGISTERSERVICENAME_STRING = "REGISTERSERVICENAME";
+
 	public final InetAddress serverAddress;
 	public final int portNoTCP;
 	public final int portNoUDP;
@@ -28,18 +37,18 @@ public class Configuration
 		properties.load(fis);
 		fis.close();
 
-		if (properties.containsKey(Constants.SERVERADDRESS_STRING) && properties.containsKey(Constants.PORTNOTCP_STRING) && 
-			properties.containsKey(Constants.PORTNOUDP_STRING) && properties.containsKey(Constants.MULTICASTADDRESS_STRING) &&
-			properties.containsKey(Constants.REGISTRYADDRESS_STRING) && properties.containsKey(Constants.PORTNOREGISTRY_STRING) &&
-			properties.containsKey(Constants.REGISTERSERVICENAME_STRING))
+		if (properties.containsKey(SERVERADDRESS_STRING) && properties.containsKey(PORTNOTCP_STRING) && 
+			properties.containsKey(PORTNOUDP_STRING) && properties.containsKey(MULTICASTADDRESS_STRING) &&
+			properties.containsKey(REGISTRYADDRESS_STRING) && properties.containsKey(PORTNOREGISTRY_STRING) &&
+			properties.containsKey(REGISTERSERVICENAME_STRING))
 		{
 			// getting port numbers:
 			try
 			{
-				portNoTCP = Constants.parsePortNo(properties.getProperty(Constants.PORTNOTCP_STRING));
-				portNoUDP = Constants.parsePortNo(properties.getProperty(Constants.PORTNOUDP_STRING));
-				portNoRegistry = Constants.parsePortNo(properties.getProperty(Constants.PORTNOREGISTRY_STRING));
-				portNoMulticast = Constants.parsePortNo(properties.getProperty(Constants.PORTNOMULTICAST_STRING));
+				portNoTCP = parsePortNo(properties.getProperty(PORTNOTCP_STRING));
+				portNoUDP = parsePortNo(properties.getProperty(PORTNOUDP_STRING));
+				portNoRegistry = parsePortNo(properties.getProperty(PORTNOREGISTRY_STRING));
+				portNoMulticast = parsePortNo(properties.getProperty(PORTNOMULTICAST_STRING));
 
 				if (portNoTCP == portNoUDP || portNoTCP == portNoRegistry || portNoTCP == portNoMulticast ||
 					portNoUDP == portNoRegistry || portNoUDP == portNoMulticast || portNoRegistry == portNoMulticast)
@@ -51,20 +60,29 @@ public class Configuration
 			// validating network addresses:
 			try
 			{
-				serverAddress = InetAddress.getByName(properties.getProperty(Constants.SERVERADDRESS_STRING));
-				multicastAddress = InetAddress.getByName(properties.getProperty(Constants.MULTICASTADDRESS_STRING));
-				registryAddress = InetAddress.getByName(properties.getProperty(Constants.REGISTRYADDRESS_STRING));
+				serverAddress = InetAddress.getByName(properties.getProperty(SERVERADDRESS_STRING));
+				multicastAddress = InetAddress.getByName(properties.getProperty(MULTICASTADDRESS_STRING));
+				registryAddress = InetAddress.getByName(properties.getProperty(REGISTRYADDRESS_STRING));
 
 				if (!multicastAddress.isMulticastAddress())
 					throw new InvalidConfigException("Specified multicast address is not in multicast range.");
 			}
 			catch (UnknownHostException e) { throw new InvalidConfigException(e.getMessage()); }
 
-			registerServiceName = properties.getProperty(Constants.REGISTERSERVICENAME_STRING);
+			registerServiceName = properties.getProperty(REGISTERSERVICENAME_STRING);
 
 		}
 		else
 			throw new InvalidConfigException("Not all required fields have been specified; it is advised to check" +
 				" against the documentation and the example(s) available.");
+	}
+
+	private static int parsePortNo(final String portNoStr)
+	throws NullPointerException, NumberFormatException, IllegalArgumentException
+	{
+		if (portNoStr == null) throw new NullPointerException();
+		final int portNoInt = Integer.parseInt(portNoStr);
+		if (portNoInt < 1024 || portNoInt > 65535) throw new IllegalArgumentException("Given port is not in the valid range: [1024; 65535].");
+		return portNoInt;
 	}
 }
