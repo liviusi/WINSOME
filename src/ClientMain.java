@@ -15,8 +15,8 @@ import configuration.InvalidConfigException;
 import server.storage.PasswordNotValidException;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
+import user.InvalidTagException;
+import user.TagListTooLongException;
 
 /**
  * @brief Client file.

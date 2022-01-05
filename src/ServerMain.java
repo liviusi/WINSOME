@@ -38,9 +38,9 @@ import server.storage.IllegalArchiveException;
 import server.storage.NoSuchUserException;
 import server.storage.UserMap;
 import server.storage.UserStorage;
-import server.user.InvalidLoginException;
-import server.user.InvalidLogoutException;
-import server.user.WrongCredentialsException;
+import user.InvalidLoginException;
+import user.InvalidLogoutException;
+import user.WrongCredentialsException;
 
 /**
  * @brief Server file.

@@ -35,7 +35,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
 
 import cryptography.Passwords;
-import server.user.*;
+import user.*;
 
 public class UserMap implements UserRMIStorage, UserStorage
 {

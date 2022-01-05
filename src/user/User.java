@@ -1,4 +1,4 @@
-package server.user;
+package user;
 
 import java.nio.channels.SocketChannel;
 import java.util.Base64;

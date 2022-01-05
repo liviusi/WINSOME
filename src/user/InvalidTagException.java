@@ -1,4 +1,4 @@
-package server.user;
+package user;
 
 public class InvalidTagException extends Exception
 {

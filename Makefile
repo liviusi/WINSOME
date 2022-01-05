@@ -21,25 +21,25 @@ TARGETS = run-client run-server build
 	$(JC) $(CP) $(JFLAGS) src/cryptography/Passwords.java $(OUTPUTDIR)
 
 .tag-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidTagException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidTagException.java $(OUTPUTDIR)
 
 .tag: .tag-exc
-	$(JC) $(CP) $(JFLAGS) src/server/user/Tag.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/Tag.java $(OUTPUTDIR)
 
 .login-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLoginException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidLoginException.java $(OUTPUTDIR)
 
 .logout-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLogoutException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidLogoutException.java $(OUTPUTDIR)
 
 .taglist-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/user/TagListTooLongException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/TagListTooLongException.java $(OUTPUTDIR)
 
 .cred-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/user/WrongCredentialsException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
 
 .user: .psw .tag .login-exc .logout-exc .taglist-exc .cred-exc
-	$(JC) $(CP) $(JFLAGS) src/server/user/User.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
 
 .psw-exc:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/PasswordNotValidException.java $(OUTPUTDIR)

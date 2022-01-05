@@ -1,4 +1,4 @@
-package server.user;
+package user;
 
 import java.util.Locale;
 import java.util.Objects;

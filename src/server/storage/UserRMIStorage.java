@@ -4,8 +4,8 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.Set;
 
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
+import user.InvalidTagException;
+import user.TagListTooLongException;
 
 /**
  * @brief Interface for RMI register method.

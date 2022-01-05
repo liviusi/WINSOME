@@ -17,8 +17,8 @@ import server.storage.PasswordNotValidException;
 import server.storage.UserRMIStorage;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
+import user.InvalidTagException;
+import user.TagListTooLongException;
 
 /**
  * @brief Utility class used to send properly parsed Command-Line commands from the client to the server.

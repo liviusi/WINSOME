@@ -6,9 +6,9 @@ import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.Set;
 
-import server.user.InvalidLoginException;
-import server.user.InvalidLogoutException;
-import server.user.WrongCredentialsException;
+import user.InvalidLoginException;
+import user.InvalidLogoutException;
+import user.WrongCredentialsException;
 
 /**
  * @brief Interface to be implemented by an actual storage class.

@@ -1,4 +1,4 @@
-package server.user;
+package user;
 
 public class InvalidLoginException extends Exception
 {
