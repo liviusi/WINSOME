@@ -32,11 +32,12 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
-import server.API;
 import server.BackupTask;
 import server.RMITask;
-import server.rmi.UserMap;
-import server.rmi.UserStorage;
+import server.storage.IllegalArchiveException;
+import server.storage.NoSuchUserException;
+import server.storage.UserMap;
+import server.storage.UserStorage;
 import server.user.InvalidLoginException;
 import server.user.InvalidLogoutException;
 import server.user.WrongCredentialsException;
@@ -100,6 +101,7 @@ public class ServerMain
 			boolean exceptionCaught = false;
 			boolean result = false;
 			Set<String> listUsers = null;
+			String salt = null;
 
 			buffer.flip();
 			buffer.clear();
@@ -118,8 +120,9 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout(users, client, username); }
+					try { users.handleLogout(username, client); }
 					catch (InvalidLogoutException ignored) { }
+					catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 				}
 				try { client.close(); }
 				catch (IOException ignored) { }
@@ -162,8 +165,8 @@ public class ServerMain
 						}
 						else
 						{
-							try { API.handleLogin(users, client, command[1], command[2]); }
-							catch (InvalidLoginException | WrongCredentialsException e)
+							try { users.handleLogin(command[1], client, command[2]); }
+							catch (InvalidLoginException | WrongCredentialsException | NoSuchUserException e)
 							{
 								exceptionCaught = true;
 								try
@@ -175,11 +178,8 @@ public class ServerMain
 							}
 							catch (NullPointerException e)
 							{
-								try
-								{
-									answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + Constants.NOT_REGISTERED).getBytes(StandardCharsets.US_ASCII));
-								}
+								exceptionCaught = true;
+								try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
 								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 							}
 							if (!exceptionCaught)
@@ -217,17 +217,18 @@ public class ServerMain
 						}
 						else
 						{
-							final String salt = API.handleLoginSetup(users, command[1]);
-							if (salt == null)
+							try { salt = users.handleLoginSetup(command[1]); }
+							catch (NoSuchUserException e)
 							{
+								exceptionCaught = true;
 								try
 								{
 									answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + Constants.NOT_REGISTERED).getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 								}
 								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 							}
-							else
+							if (!exceptionCaught)
 							{
 								try
 								{
@@ -251,8 +252,8 @@ public class ServerMain
 					{
 						if (loggedInClients.get(client).equals(command[1]))
 						{
-							try { API.handleLogout(users, client, command[1]); }
-							catch (InvalidLogoutException e)
+							try { users.handleLogout(command[1], client); }
+							catch (InvalidLogoutException | NoSuchUserException e)
 							{
 								exceptionCaught = true;
 								try
@@ -295,13 +296,26 @@ public class ServerMain
 					{
 						if (loggedInClients.get(client).equals(command[1]))
 						{
-							listUsers = API.handleListUser(users, command[1]);
-							try
+							try { listUsers = users.handleListUsers(command[1]); }
+							catch (NoSuchUserException e)
 							{
-								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-								size = SetToByteArray(listUsers, answerConstructor);
+								exceptionCaught = true;
+								try
+								{
+									answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							if (!exceptionCaught)
+							{
+								try
+								{
+									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+									size = SetToByteArray(listUsers, answerConstructor);
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
 						}
 						else
 						{
@@ -325,8 +339,8 @@ public class ServerMain
 					{
 						if (loggedInClients.get(client).equals(command[1]))
 						{
-							try { result = API.handleFollowUser(users, command[1], command[2]); }
-							catch (IllegalArgumentException | NullPointerException e)
+							try { users.handleFollowUser(command[1], command[2]); }
+							catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
 							{
 								exceptionCaught = true;
 								try
@@ -466,8 +480,9 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout(users, client, username); }
+					try { users.handleLogout(username, client); }
 					catch (InvalidLogoutException ignored) { }
+					catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 				}
 				try { client.close(); }
 				catch (IOException ignored) { }
@@ -479,8 +494,9 @@ public class ServerMain
 				if (username != null)
 				{
 					loggedInClients.remove(client);
-					try { API.handleLogout(users, client, username); }
+					try { users.handleLogout(username, client); }
 					catch (InvalidLogoutException ignored) { }
+					catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 				}
 				try { client.close(); }
 				catch (IOException ignored) { }
@@ -520,7 +536,7 @@ public class ServerMain
 		// setting up rmi:
 		UserStorage users = null;
 		try { users = UserMap.fromJSON(new File("./storage/users.json"), new File("./storage/following.json")); }
-		catch (FileNotFoundException e) { users = new UserMap(); }
+		catch (FileNotFoundException | IllegalArchiveException e) { users = new UserMap(); }
 		catch (IOException e)
 		{
 			System.err.println("Fatal error occurred while parsing user storage: now aborting...");

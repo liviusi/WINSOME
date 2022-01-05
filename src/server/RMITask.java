@@ -7,8 +7,8 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 
 import configuration.ServerConfiguration;
-import server.rmi.UserMap;
-import server.rmi.UserRMIStorage;
+import server.storage.UserMap;
+import server.storage.UserRMIStorage;
 
 public class RMITask implements Runnable
 {

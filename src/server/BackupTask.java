@@ -3,7 +3,7 @@ package server;
 import java.io.File;
 import java.io.IOException;
 
-import server.rmi.UserStorage;
+import server.storage.UserStorage;
 
 public class BackupTask implements Runnable
 {
