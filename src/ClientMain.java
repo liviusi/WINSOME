@@ -12,9 +12,9 @@ import api.Command;
 import api.Constants;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
-import server.rmi.PasswordNotValidException;
-import server.rmi.UsernameAlreadyExistsException;
-import server.rmi.UsernameNotValidException;
+import server.storage.PasswordNotValidException;
+import server.storage.UsernameAlreadyExistsException;
+import server.storage.UsernameNotValidException;
 import server.user.InvalidTagException;
 import server.user.TagListTooLongException;
 

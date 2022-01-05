@@ -42,22 +42,28 @@ TARGETS = run-client run-server build
 	$(JC) $(CP) $(JFLAGS) src/server/user/User.java $(OUTPUTDIR)
 
 .psw-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/PasswordNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/storage/PasswordNotValidException.java $(OUTPUTDIR)
 
 .nameexists-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/UsernameAlreadyExistsException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameAlreadyExistsException.java $(OUTPUTDIR)
+
+.illegalarchive-exc:
+	$(JC) $(CP) $(JFLAGS) src/server/storage/IllegalArchiveException.java $(OUTPUTDIR)
+
+.nosuchuser-exc:
+	$(JC) $(CP) $(JFLAGS) src/server/storage/NoSuchUserException.java $(OUTPUTDIR)
 
 .invname-exc:
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/UsernameNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameNotValidException.java $(OUTPUTDIR)
 
-.userrmistorage: .psw-exc .nameexists-exc .invname-exc .user
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserRMIStorage.java $(OUTPUTDIR)
+.userrmistorage: .psw-exc .nameexists-exc .invname-exc .user .nosuchuser-exc
+	$(JC) $(CP) $(JFLAGS) src/server/storage/UserRMIStorage.java $(OUTPUTDIR)
 
-.userstorage: .user
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserStorage.java $(OUTPUTDIR)
+.userstorage: .userrmistorage .illegalarchive-exc
+	$(JC) $(CP) $(JFLAGS) src/server/storage/UserStorage.java $(OUTPUTDIR)
 
 .usermap: .userstorage .userrmistorage
-	$(JC) $(CP) $(JFLAGS) src/server/rmi/UserMap.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/storage/UserMap.java $(OUTPUTDIR)
 
 .backup: .usermap
 	$(JC) $(CP) $(JFLAGS) src/server/BackupTask.java $(OUTPUTDIR)
@@ -83,13 +89,10 @@ TARGETS = run-client run-server build
 .clientapi: .servconf .apiconstants .apicodes .communication .rc .response
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
-.serverapi: .user .usermap
-	$(JC) $(CP) $(JFLAGS) src/server/API.java $(OUTPUTDIR)
-
 .client: .clientapi
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .serverapi .backup .communication .rc
+.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .backup .communication .rc
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: .server .client

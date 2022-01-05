@@ -13,10 +13,10 @@ import java.util.Objects;
 import java.util.Set;
 
 import cryptography.Passwords;
-import server.rmi.PasswordNotValidException;
-import server.rmi.UserRMIStorage;
-import server.rmi.UsernameAlreadyExistsException;
-import server.rmi.UsernameNotValidException;
+import server.storage.PasswordNotValidException;
+import server.storage.UserRMIStorage;
+import server.storage.UsernameAlreadyExistsException;
+import server.storage.UsernameNotValidException;
 import server.user.InvalidTagException;
 import server.user.TagListTooLongException;
 
