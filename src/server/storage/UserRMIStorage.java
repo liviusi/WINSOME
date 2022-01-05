@@ -11,6 +11,7 @@ import user.TagListTooLongException;
  * @brief Interface for RMI register method.
  * @author Giacomo Trapani
  */
+@FunctionalInterface
 public interface UserRMIStorage extends Remote
 {
 	/**

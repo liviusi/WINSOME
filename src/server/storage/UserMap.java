@@ -39,13 +39,20 @@ import user.*;
 
 public class UserMap implements UserRMIStorage, UserStorage
 {
+	/** Users already stored inside backup file. */
 	private Map<String, User> usersBackedUp = null; // already backed up
+	/** Users yet to be stored. */
 	private Map<String, User> usersToBeBackedUp = null;
+	/** Used to make the class thread safe. */
 	private ReadWriteLock lock = null;
+	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
 	private boolean flag = false;
-	private static final String EMPTY_STRING = "";
-	private static final int BUFFERSIZE = 1024;
 
+	/** Empty string. */
+	private static final String EMPTY_STRING = "";
+	/** Default ByteBuffer size. */
+	private static final int BUFFERSIZE = 1024;
+	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_PARAM_ERROR = " cannot be null.";
 
 	public UserMap()
@@ -124,7 +131,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 	}
 
 	public void handleLogout(final String username, final SocketChannel clientID)
-	throws NoSuchUserException, InvalidLogoutException
+	throws NoSuchUserException, InvalidLogoutException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(clientID, "Client ID" + NULL_PARAM_ERROR);
@@ -214,6 +221,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 			@Override
 			public boolean shouldSkipField(FieldAttributes f)
 			{
+				// skips "following" field specified inside User class.
 				return f.getDeclaringClass() == User.class && f.getName().equals("following");
 			}
 
@@ -223,72 +231,79 @@ public class UserMap implements UserRMIStorage, UserStorage
 				return false;
 			}
 		}).create();
+
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
-		File tmp = new File("tmp-users.json");
 		byte[] data = null;
-		int i = 0;
 		Path from = null;
 		Path to = null;
+		Scanner scanner = null;
+		FileOutputStream fos = null;
+		FileChannel c = null;
+
 		try
 		{
 			lock.writeLock().lock();
 			if (usersToBeBackedUp.isEmpty()) return;
+
+			// the file is non-empty:
+			// the closing square bracket is to be deleted.
 			if (!(usersBackedUp.isEmpty()) || flag)
 			{
+				File copy = new File("copy-users.json");
+				scanner = new Scanner(usersFile);
+				fos = new FileOutputStream(copy);
+				c = fos.getChannel();
 				flag = false;
-				// delete last character
-				try
-				(
-					final Scanner scanner = new Scanner(usersFile);
-					final FileOutputStream fos = new FileOutputStream(tmp);
-					final FileChannel c = fos.getChannel()
-				)
+				while(scanner.hasNextLine())
 				{
-					while(scanner.hasNextLine())
-					{
-						String line = scanner.nextLine();
-						if(!scanner.hasNextLine())
-							line = line.substring(0, line.length() - 1) + "\n";
-						else
-							line = line + "\n";
-						buffer.clear();
-						data = line.getBytes(StandardCharsets.US_ASCII);
-						buffer.put(data);
-						buffer.flip();
-						while (buffer.hasRemaining()) c.write(buffer);
-					}
+					String line = scanner.nextLine();
+					if(!scanner.hasNextLine())
+						line = line.substring(0, line.length() - 1) + "\n";
+					else
+						line = line + "\n";
+					buffer.clear();
+					data = line.getBytes(StandardCharsets.US_ASCII);
+					buffer.put(data);
+					buffer.flip();
+					while (buffer.hasRemaining()) c.write(buffer);
 				}
+				scanner.close();
 				// replace file:
-				from = tmp.toPath();
+				from = copy.toPath();
 				to = usersFile.toPath();
 				Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
 				Files.delete(from);
+				c.close();
+				fos.close();
 			}
-			try
-			(
-				final FileOutputStream fos = new FileOutputStream(usersFile, true);
-				final FileChannel c = fos.getChannel()
-			)
+
+			fos = new FileOutputStream(usersFile, true);
+			c = fos.getChannel();
+
+			if (usersBackedUp.isEmpty()) writeChar(c, '[');
+			else writeChar(c, ',');
+
+			int i = 0;
+			for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
 			{
-				if (usersBackedUp.isEmpty()) writeChar(c, '[');
-				else writeChar(c, ',');
-				for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
+				User u = it.next();
+				usersBackedUp.put(u.username, u);
+				data = gson.toJson(u).getBytes();
+				buffer.flip(); buffer.clear();
+				for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
 				{
-					User u = it.next();
-					usersBackedUp.put(u.username, u);
-					data = gson.toJson(u).getBytes();
-					for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
-					{
-						buffer.clear();
-						buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
-						buffer.flip();
-						while (buffer.hasRemaining()) c.write(buffer);
-					}
-					if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
+					buffer.clear();
+					buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
+					buffer.flip();
+					while (buffer.hasRemaining()) c.write(buffer);
 				}
-				writeChar(c, ']');
+				if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
 			}
+			writeChar(c, ']');
 			usersToBeBackedUp = new HashMap<>();
+
+			c.close();
+			fos.close();
 		}
 		finally { lock.writeLock().unlock(); }
 	}
@@ -301,6 +316,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 			@Override
 			public boolean shouldSkipField(FieldAttributes f)
 			{
+				// skips everything except username and following field
 				return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
 						!f.getName().equals("username");
 			}
@@ -312,8 +328,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 			}
 			
 		}).create();
+
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		int i = 0;
+
 		try
 		{
 			lock.readLock().lock();
@@ -344,26 +362,27 @@ public class UserMap implements UserRMIStorage, UserStorage
 	}
 
 	/**
-	 *  Metodo per scrivere un singolo carattere sul canale.
-	 *  @param channel riferimento al canale su cui scrivere
-	 *  @param c il carattere da scrivere
+	 * @brief Instantiates UserMap given a backup of its users and one of their follows both written according to json syntax.
+	 * @param usersFile cannot be null, must be a valid user backup.
+	 * @param followingFile cannot be null, must be a valid backup of users' follows.
+	 * @return Instantiated map on success.
+	 * @throws FileNotFoundException FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
+	 * or cannot be opened for any other reason.
+	 * @throws IOException if I/O error(s) occur.
+	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow json syntax or it does not
+	 * this class' IR).
 	 */
-	private static void writeChar(FileChannel channel, char c)
-	throws IOException
-	{
-		CharBuffer charBuffer = CharBuffer.wrap(new char[]{c});
-		ByteBuffer byteBuffer = StandardCharsets.US_ASCII.encode(charBuffer);
-		// Leggo il contenuto del buffer e lo scrivo sul canale.
-		channel.write(byteBuffer);
-	}
-
 	public static UserMap fromJSON(final File usersFile, final File followingFile)
 	throws FileNotFoundException, IOException, IllegalArchiveException
 	{
+		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
+
 		UserMap map = new UserMap();
 		map.flag = true;
+
 		InputStream is = new FileInputStream(usersFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
+
 		reader.setLenient(true);
 		reader.beginArray();
 		while (reader.hasNext())
@@ -420,6 +439,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		is = new FileInputStream(followingFile);
 		reader = new JsonReader(new InputStreamReader(is));
+
 		reader.setLenient(true);
 		reader.beginArray();
 		while (reader.hasNext())
@@ -442,8 +462,12 @@ public class UserMap implements UserRMIStorage, UserStorage
 				}
 				for (String s: following)
 				{
-					try { map.handleFollowUser(username, s); }
-					catch (NullPointerException | NoSuchUserException illegalJSON) { throw new IllegalArchiveException("The files to be parsed are not a valid storage."); }
+					try
+					{
+						if (!map.handleFollowUser(username, s))
+							throw new IllegalArchiveException(INVALID_STORAGE);
+					}
+					catch (NullPointerException | NoSuchUserException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 				}
 			}
 			reader.endObject();
@@ -452,5 +476,21 @@ public class UserMap implements UserRMIStorage, UserStorage
 		reader.close();
 		is.close();
 		return map;
+	}
+
+	/**
+	 * @brief Writes a single character onto the channel.
+	 * @param channel pointer to the channel to write on
+	 * @param c character to write
+	 * @throws IOException if I/O error(s) occur.
+	 * @author Matteo Loporchio
+	 */
+	private static void writeChar(FileChannel channel, char c)
+	throws IOException
+	{
+		CharBuffer charBuffer = CharBuffer.wrap(new char[]{c});
+		ByteBuffer byteBuffer = StandardCharsets.US_ASCII.encode(charBuffer);
+		// Leggo il contenuto del buffer e lo scrivo sul canale.
+		channel.write(byteBuffer);
 	}
 }

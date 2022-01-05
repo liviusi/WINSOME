@@ -545,7 +545,7 @@ public class ServerMain
 		}
 		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users));
 		rmi.start();
-		Thread backup = new Thread(new BackupTask(new File(USERS_FILENAME), users));
+		Thread backup = new Thread(new BackupTask(new File(USERS_FILENAME), new File("./storage/following.json"), users));
 		backup.start();
 
 		// setting up multiplexing:
