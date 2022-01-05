@@ -135,10 +135,11 @@ public class ClientMain
 						System.err.println(SERVER_DISCONNECT);
 						break loop;
 					}
-					if (result == 1 && !loggedIn)
+					if (result == 0 && !loggedIn)
 					{
 						loggedIn = true;
 						loggedInUsername = command[1];
+						System.out.println(command[1] + Constants.LOGIN_SUCCESS);
 					}
 					continue;
 				}
@@ -170,7 +171,7 @@ public class ClientMain
 						System.err.println(SERVER_DISCONNECT);
 						break loop;
 					}
-					if (result == 1)
+					if (result == 0)
 					{
 						loggedIn = false;
 						loggedInUsername = null;
@@ -186,12 +187,17 @@ public class ClientMain
 						e.printStackTrace();
 						break loop;
 					}
+					catch (NullPointerException e)
+					{
+						System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+						continue;
+					}
 					if (result == -1)
 					{
 						System.err.println(SERVER_DISCONNECT);
 						break loop;
 					}
-					else if (result == 1)
+					else if (result == 0)
 					{
 						String[] tmp = null;
 						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));

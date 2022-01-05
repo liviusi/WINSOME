@@ -2,7 +2,6 @@ package api;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
@@ -21,12 +20,36 @@ import server.rmi.UsernameNotValidException;
 import server.user.InvalidTagException;
 import server.user.TagListTooLongException;
 
+/**
+ * @brief Utility class used to send properly parsed Command-Line commands from the client to the server.
+ * @author Giacomo Trapani
+ */
+
 public class Command
 {
 
+	/** Used as an error message whenever response's parsing fails. */
 	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
+	/** Used as an error message whenever an input parameter is null. */
 	private static final String NULL_ERROR = " cannot be null.";
 
+	/**
+	 * @brief Signs up a user to WINSOME.
+	 * @param username cannot be null.
+	 * @param password cannot be null.
+	 * @param tags cannot be null, may be empty.
+	 * @param portNo port the registry is located on.
+	 * @param serviceName cannot be null, it is the register function's name in the registry.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @throws RemoteException if a communication error occurs.
+	 * @throws NotBoundException if serviceName is not currently bound.
+	 * @throws NullPointerException if any parameters are null.
+	 * @throws UsernameNotValidException if username does not contain any alphanumeric character.
+	 * @throws UsernameAlreadyExistsException if username is already taken.
+	 * @throws PasswordNotValidException if password is the empty string.
+	 * @throws InvalidTagException if tag does not contain any alphanumeric character.
+	 * @throws TagListTooLongException if more than 5 tags are specified.
+	 */
 	public static void register(String username, String password, Set<String> tags, int portNo, String serviceName, boolean verbose)
 	throws RemoteException, NotBoundException, NullPointerException, UsernameNotValidException, UsernameAlreadyExistsException,
 			PasswordNotValidException, InvalidTagException, TagListTooLongException
@@ -39,8 +62,18 @@ public class Command
 		if (verbose) System.out.println(username + " has now signed up.");
 	}
 
+	/**
+	 * @brief Logs in a user to WINSOME.
+	 * @param username cannot be null.
+	 * @param password cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if response is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int login(String username, String password, SocketChannel server, boolean verbose)
-	throws IOException
+	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(password, "Password" + NULL_ERROR);
@@ -55,34 +88,48 @@ public class Command
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		// Login setup:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
-		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1; // retrieving salt
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
 		if (r.code != ResponseCode.OK)
 		{
-			printIf(System.out, r, verbose);
+			printIf(r, verbose);
 			return 0;
 		}
 		saltDecoded = r.body;
 		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.US_ASCII);
+		// Login:<username>:<hash(password, salt)>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		printIf(System.out, r, verbose);
-		if (r.code == ResponseCode.OK) return 1;
-		else return 0;
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
 	}
 
+	/**
+	 * @brief Logs out a user of WINSOME.
+	 * @param username cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int logout(String username, SocketChannel server, boolean verbose)
-	throws IOException
+	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
@@ -94,19 +141,33 @@ public class Command
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		// Logout:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		printIf(System.out, r, verbose);
-		if (r.code == ResponseCode.OK) return 1;
-		else return 0;
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
 	}
 
+	/**
+	 * @brief Lists out all the users on WINSOME sharing at least a common interest with the caller.
+	 * @param username cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @param dest cannot be null, it will contain the usernames of the users sharing at least a common interest with username.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int listUsers(String username, SocketChannel server, boolean verbose, Set<String> dest)
-	throws IOException
+	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
@@ -123,22 +184,44 @@ public class Command
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
 		r = Response.parseAnswer(baos.toByteArray());
-		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		if (verbose)
+		if (r == null)
 		{
-			System.out.printf("Code: %s", r.code.getDescription());
+			Response<String> retry = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (retry == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(retry, verbose);
+				return 1;
+			}
 		}
-		if (r.code != ResponseCode.OK) return 0;
-		for (String s: r.body)
-			dest.add(s);
-		return 1;
+		if (r.code == ResponseCode.OK)
+		{
+			for (String s: r.body) dest.add(s);
+			return 0;
+		}
+		else
+		{
+			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
+			return 1;
+		}
 	}
 
+	/**
+	 * @brief Starts following a user on WINSOME.
+	 * @param follower cannot be null.
+	 * @param followed cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int followUser(String follower, String followed, SocketChannel server, boolean verbose)
-	throws IOException
+	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(follower, "Username" + NULL_ERROR);
 		Objects.requireNonNull(followed, "User to be followed's username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
 		byte[] bytes = null;
@@ -153,17 +236,25 @@ public class Command
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		printIf(System.out, r, verbose);
-		if (r.code == ResponseCode.OK) return 1;
-		else return 0;
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
 	}
 
-	private static void printIf(PrintStream stream, Response<String> toPrint, boolean flag)
+	/**
+	 * @brief Prints on System.out if flag is toggled on.
+	 * @param toPrint response to be printed out
+	 * @param flag to be toggled on if response is to be printed out.
+	 */
+	private static void printIf(Response<String> toPrint, boolean flag)
 	{
 		if (flag)
 		{
-			stream.printf("< Code: %s", toPrint.code.getDescription());
-			stream.println("< "+ toPrint.body);
+			System.out.printf("< Code: %s", toPrint.code.getDescription());
+			System.out.println("< "+ toPrint.body);
 		}
 	}
 }
