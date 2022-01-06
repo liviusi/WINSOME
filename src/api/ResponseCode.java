@@ -6,7 +6,6 @@ package api;
  */
 public enum ResponseCode
 {
-
 	OK("200\r\n"),
 	CREATED("201\r\n"),
 	BAD_REQUEST("400\r\n"),

@@ -26,6 +26,7 @@ public class RMITask implements Runnable
 	/** Time to be spent sleeping. */
 	public static final int TIMEOUT = 10000;
 
+	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_ERROR = " cannot be null.";
 
 	/**

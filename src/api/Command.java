@@ -27,7 +27,6 @@ import user.TagListTooLongException;
 
 public class Command
 {
-
 	/** Used as an error message whenever response's parsing fails. */
 	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
 	/** Used as an error message whenever an input parameter is null. */

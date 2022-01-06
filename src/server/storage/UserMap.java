@@ -37,6 +37,10 @@ import com.google.gson.stream.JsonReader;
 import cryptography.Passwords;
 import user.*;
 
+/**
+ * @brief User storage backed up by a hashmap. This class is thread-safe.
+ * @author Giacomo Trapani
+ */
 public class UserMap implements UserRMIStorage, UserStorage
 {
 	/** Users already stored inside backup file. */
@@ -55,6 +59,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_PARAM_ERROR = " cannot be null.";
 
+	/** Default constructor. */
 	public UserMap()
 	{
 		usersBackedUp = new HashMap<>();

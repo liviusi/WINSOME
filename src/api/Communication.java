@@ -13,7 +13,6 @@ import java.util.Objects;
  */
 public class Communication
 {
-
 	private Communication() { }
 
 	/**

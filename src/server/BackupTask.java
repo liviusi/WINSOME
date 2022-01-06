@@ -22,6 +22,7 @@ public class BackupTask implements Runnable
 	/** Pointer to user storage */
 	private final UserStorage users;
 
+	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_ERROR = " cannot be null.";
 
 	/**
