@@ -17,11 +17,21 @@ import user.WrongCredentialsException;
 public interface UserStorage
 {
 	/**
+	 * @brief Recovers the set of the usernames of the users the given user is currently followed by.
+	 * @param username cannot be null, must belong to WINSOME registered users' set.
+	 * @return the usernames of every user currently following given user.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if username is null.
+	 */
+	public Set<String> recoverFollowers(final String username)
+	throws NoSuchUserException, NullPointerException;
+
+	/**
 	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt
 	 * encoded with US ASCII.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the decoded salt to use when hashing the password during the login procedure.
-	 * @throws NoSuchUserException if username has yet to be registed to WINSOME.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
 	 * @throws NullPointerException if username is null.
 	 */
 	public String handleLoginSetup(final String username)

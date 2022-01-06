@@ -18,12 +18,23 @@ public class ServerConfiguration extends Configuration
 	private static final String MAXIMUMPOOLSIZE_STRING = "MAXIMUMPOOLSIZE";
 	private static final String KEEPALIVETIME_STRING = "KEEPALIVETIME";
 	private static final String THREADPOOLTIMEOUT_STRING = "THREADPOOLTIMEOUT";
+	private static final String USERSTORAGE_STRING = "USERSTORAGE";
+	private static final String FOLLOWINGSTORAGE_STRING = "FOLLOWINGSTORAGE";
 
+	/** Socket timeout value. */
 	public final int socketTimeout;
+	/** Thread pool core pool size. */
 	public final int corePoolSize;
+	/** Thread pool maximum pool size. */
 	public final int maximumPoolSize;
+	/** Thread pool keep alive time. */
 	public final int keepAliveTime;
+	/** Thread pool timeout value. */
 	public final int threadPoolTimeout;
+	/** Filename users are to be stored in. */
+	public final String userStorageFilename;
+	/** Filename users and the users they are following are to be stored in. */
+	public final String followingStorageFilename;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -43,7 +54,8 @@ public class ServerConfiguration extends Configuration
 
 		if (properties.containsKey(SOCKETTIMEOUT_STRING) && properties.containsKey(COREPOOLSIZE_STRING) &&
 			properties.containsKey(MAXIMUMPOOLSIZE_STRING) && properties.containsKey(KEEPALIVETIME_STRING) &&
-			properties.containsKey(THREADPOOLTIMEOUT_STRING))
+			properties.containsKey(THREADPOOLTIMEOUT_STRING) && properties.containsKey(USERSTORAGE_STRING) &&
+			properties.containsKey(FOLLOWINGSTORAGE_STRING))
 		{
 			// validating socket timeout:
 			try
@@ -81,6 +93,8 @@ public class ServerConfiguration extends Configuration
 				if (threadPoolTimeout <= 0) throw new InvalidConfigException("Thread pool timeout must be greater than zero.");
 			}
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);
+			followingStorageFilename = properties.getProperty(FOLLOWINGSTORAGE_STRING);
 			return;
 		}
 		else

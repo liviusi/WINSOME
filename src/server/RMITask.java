@@ -17,12 +17,18 @@ import server.storage.UserRMIStorage;
  */
 public class RMITask implements Runnable
 {
-	/** Port the registry is located on. */
+	/** Name of the address the registry is to be located on. */
+	public final String registryAddressName;
+	/** Port the registry is to be located on. */
 	public final int port;
 	/** Name of the registration service. */
-	public final String serviceName;
+	public final String registerServiceName;
+	/** Name of the callback service. */
+	public final String callbackServiceName;
 	/** User storage */
 	private UserMap users = null;
+	/** Callback service. */
+	private RMICallbackService callbackService = null;
 	/** Time to be spent sleeping. */
 	public static final int TIMEOUT = 10000;
 
@@ -33,28 +39,34 @@ public class RMITask implements Runnable
 	 * @brief Default constructor.
 	 * @param configuration cannot be null.
 	 * @param users cannot be null.
+	 * @param callbackService cannot be null.
 	 * @throws NullPointerException if any parameter is null.
 	 */
-	public RMITask(ServerConfiguration configuration, UserMap users)
+	public RMITask(ServerConfiguration configuration, UserMap users, RMICallbackService callbackService)
 	throws NullPointerException
 	{
 		Objects.requireNonNull(configuration, "Configuration" + NULL_ERROR);
 		Objects.requireNonNull(users, "User map" + NULL_ERROR);
+		Objects.requireNonNull(callbackService, "Callback service" + NULL_ERROR);
+		this.registryAddressName = configuration.registryAddressName;
 		this.port = configuration.portNoRegistry;
-		this.serviceName = configuration.registerServiceName;
+		this.registerServiceName = configuration.registerServiceName;
+		this.callbackServiceName = configuration.callbackServiceName;
 		this.users = users;
+		this.callbackService = callbackService;
 	}
 
 	public void run()
 	{
-		UserRMIStorage stub = null;
+		UserRMIStorage registerService = null;
 		Registry r = null;
 		try
 		{
-			stub = (UserRMIStorage) UnicastRemoteObject.exportObject(users, 0);
 			LocateRegistry.createRegistry(port);
-			r = LocateRegistry.getRegistry(port);
-			r.rebind(serviceName, stub);
+			r = LocateRegistry.getRegistry(registryAddressName, port);
+			registerService = (UserRMIStorage) UnicastRemoteObject.exportObject(users, 0);
+			r.rebind(registerServiceName, registerService);
+			r.rebind(callbackServiceName, callbackService);
 		}
 		catch (RemoteException e)
 		{
@@ -73,7 +85,7 @@ public class RMITask implements Runnable
 				try
 				{
 					// deallocate resources:
-					r.unbind(serviceName);
+					r.unbind(registerServiceName);
 					UnicastRemoteObject.unexportObject(users, true);
 					System.out.println("RMI shutdown complete.");
 				}

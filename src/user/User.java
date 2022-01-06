@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * @brief Class used to denote a user registered on WINSOME. This class is not thread-safe.
+ * @brief Class used to denote a user registered on WINSOME. This class is thread-safe.
  * @author Giacomo Trapani
  */
 public class User
@@ -131,8 +131,13 @@ public class User
 	throws NullPointerException
 	{
 		Objects.requireNonNull(u, "User cannot be null");
-		if (u.equals(this)) return false;
-		return following.add(u.username);
+		boolean result = false;
+		synchronized(this)
+		{
+			if (u.equals(this)) return false;
+			result = following.add(u.username);
+		}
+		return result;
 	}
 
 	/**

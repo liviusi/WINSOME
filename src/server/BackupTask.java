@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Objects;
 
+import configuration.ServerConfiguration;
 import server.storage.UserStorage;
 
 /**
@@ -32,16 +33,13 @@ public class BackupTask implements Runnable
 	 * @param users cannot be null.
 	 * @throws NullPointerException if any parameter is null.
 	 */
-	public BackupTask(final File usersFile, final File followingFile, final UserStorage users)
+	public BackupTask(final ServerConfiguration configuration, final UserStorage users)
 	throws NullPointerException
 	{
-		Objects.requireNonNull(usersFile, "Users' backup file" + NULL_ERROR);
-		Objects.requireNonNull(followingFile, "Users' follows backup file" + NULL_ERROR);
+		Objects.requireNonNull(configuration, "Configuration" + NULL_ERROR);
 		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
-		if (usersFile == null || users == null)
-			throw new NullPointerException("Constructor parameters cannot be null.");
-		this.usersFile = usersFile;
-		this.followingFile = followingFile;
+		this.usersFile = new File(configuration.userStorageFilename);
+		this.followingFile = new File(configuration.followingStorageFilename);
 		this.users = users;
 
 	}

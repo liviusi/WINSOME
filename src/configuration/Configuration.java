@@ -18,15 +18,26 @@ public class Configuration
 	private static final String REGISTRYADDRESS_STRING = "REGISTRYHOST";
 	private static final String PORTNOREGISTRY_STRING = "REGISTRYPORT";
 	private static final String REGISTERSERVICENAME_STRING = "REGISTERSERVICENAME";
+	private static final String CALLBACKSERVICENAME_STRING = "CALLBACKSERVICENAME";
 
+	/** Server address. */
 	public final InetAddress serverAddress;
+	/** Port number for TCP connections. */
 	public final int portNoTCP;
+	/** Port number for UDP connections. */
 	public final int portNoUDP;
+	/** Multicast address. */
 	public final InetAddress multicastAddress;
+	/** Multicast port number. */
 	public final int portNoMulticast;
-	public final InetAddress registryAddress;
+	/** Host the registry is located in. */
+	public final String registryAddressName;
+	/** Port number for RMI registry. */
 	public final int portNoRegistry;
+	/** Name of the service handling register operation. */
 	public final String registerServiceName;
+	/** Name of the service handling callbacks. */
+	public final String callbackServiceName;
 	
 	public Configuration(final File configurationFile)
 	throws NullPointerException, FileNotFoundException, IOException, InvalidConfigException
@@ -40,7 +51,7 @@ public class Configuration
 		if (properties.containsKey(SERVERADDRESS_STRING) && properties.containsKey(PORTNOTCP_STRING) && 
 			properties.containsKey(PORTNOUDP_STRING) && properties.containsKey(MULTICASTADDRESS_STRING) &&
 			properties.containsKey(REGISTRYADDRESS_STRING) && properties.containsKey(PORTNOREGISTRY_STRING) &&
-			properties.containsKey(REGISTERSERVICENAME_STRING))
+			properties.containsKey(REGISTERSERVICENAME_STRING) && properties.containsKey(CALLBACKSERVICENAME_STRING))
 		{
 			// getting port numbers:
 			try
@@ -62,14 +73,15 @@ public class Configuration
 			{
 				serverAddress = InetAddress.getByName(properties.getProperty(SERVERADDRESS_STRING));
 				multicastAddress = InetAddress.getByName(properties.getProperty(MULTICASTADDRESS_STRING));
-				registryAddress = InetAddress.getByName(properties.getProperty(REGISTRYADDRESS_STRING));
 
 				if (!multicastAddress.isMulticastAddress())
 					throw new InvalidConfigException("Specified multicast address is not in multicast range.");
 			}
 			catch (UnknownHostException e) { throw new InvalidConfigException(e.getMessage()); }
 
+			registryAddressName = properties.getProperty(REGISTRYADDRESS_STRING);
 			registerServiceName = properties.getProperty(REGISTERSERVICENAME_STRING);
+			callbackServiceName = properties.getProperty(CALLBACKSERVICENAME_STRING);
 
 		}
 		else

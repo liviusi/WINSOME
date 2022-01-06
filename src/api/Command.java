@@ -97,7 +97,7 @@ public class Command
 		if (r.code != ResponseCode.OK)
 		{
 			printIf(r, verbose);
-			return 0;
+			return 1;
 		}
 		saltDecoded = r.body;
 		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));

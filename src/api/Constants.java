@@ -20,6 +20,7 @@ public class Constants
 	public static final String LOGOUT_STRING = "logout";
 	public static final String LIST_USERS_STRING = "list users";
 	public static final String FOLLOW_USER_STRING = "follow";
+	public static final String LIST_FOLLOWERS_STRING = "list followers";
 
 	private Constants() { }
 }

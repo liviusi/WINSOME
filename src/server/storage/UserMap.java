@@ -25,8 +25,8 @@ import java.util.Objects;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.Map.Entry;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
@@ -47,8 +47,6 @@ public class UserMap implements UserRMIStorage, UserStorage
 	private Map<String, User> usersBackedUp = null; // already backed up
 	/** Users yet to be stored. */
 	private Map<String, User> usersToBeBackedUp = null;
-	/** Used to make the class thread safe. */
-	private ReadWriteLock lock = null;
 	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
 	private boolean flag = false;
 
@@ -62,10 +60,9 @@ public class UserMap implements UserRMIStorage, UserStorage
 	/** Default constructor. */
 	public UserMap()
 	{
-		usersBackedUp = new HashMap<>();
-		usersToBeBackedUp = new HashMap<>();
+		usersBackedUp = new ConcurrentHashMap<>();
+		usersToBeBackedUp = new ConcurrentHashMap<>();
 		flag = false;
-		lock = new ReentrantReadWriteLock();
 	}
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
@@ -85,14 +82,24 @@ public class UserMap implements UserRMIStorage, UserStorage
 		emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.US_ASCII), salt);
 		if (emptyStringHashed.equals(password)) throw new PasswordNotValidException("Password" + EMPTY_ERROR);
 		u = new User(username, password, tags, salt);
-		try
-		{
-			lock.writeLock().lock();
-			if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
-				throw new UsernameAlreadyExistsException("Username has already been taken.");
-			usersToBeBackedUp.put(username, u);
-		}
-		finally { lock.writeLock().unlock(); }
+		if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
+			throw new UsernameAlreadyExistsException("Username has already been taken.");
+		usersToBeBackedUp.put(username, u);
+	}
+
+	public Set<String> recoverFollowers(final String username)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		if (usersBackedUp.get(username) == usersToBeBackedUp.get(username))
+			throw new NoSuchUserException(username + " has yet to sign up.");
+		
+		return usersBackedUp.values().stream()
+				.filter(u -> u.getFollowing().contains(username))
+				.map(u -> u.username + "\r\n" + String.join(", ",
+					u.getTags().stream().map(t -> t.name)
+					.collect(Collectors.toSet())))
+				.collect(Collectors.toSet());
 	}
 
 	public String handleLoginSetup(final String username)
@@ -103,15 +110,11 @@ public class UserMap implements UserRMIStorage, UserStorage
 		String saltDecoded = null;
 		User u = null;
 
-		try
-		{
-			lock.readLock().lock();
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-			if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
-			saltDecoded = u.saltDecoded;
-		}
-		finally { lock.readLock().unlock(); }
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		saltDecoded = u.saltDecoded;
+
 		return saltDecoded;
 	}
 
@@ -124,15 +127,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		User u = null;
 
-		try
-		{
-			lock.writeLock().lock();
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-			if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
-			u.login(clientID, hashPassword);
-		}
-		finally { lock.writeLock().unlock(); }
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		u.login(clientID, hashPassword);
 	}
 
 	public void handleLogout(final String username, final SocketChannel clientID)
@@ -143,15 +141,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		User u = null;
 
-		try
-		{
-			lock.writeLock().lock();
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-			if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
-			u.logout(clientID);
-		}
-		finally { lock.writeLock().unlock(); }
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		u.logout(clientID);
 	}
 
 	public Set<String> handleListUsers(final String username)
@@ -166,29 +159,25 @@ public class UserMap implements UserRMIStorage, UserStorage
 		Set<Tag> tmpTags = null;
 		int size = -1;
 
-		try
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		uTags = u.getTags();
+		for (Entry<String, User> entry: usersBackedUp.entrySet())
 		{
-			lock.readLock().lock();
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-			if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
-			uTags = u.getTags();
-			for (Entry<String, User> entry: usersBackedUp.entrySet())
+			if (entry.getKey().equals(username)) continue;
+			tmp = entry.getValue();
+			tmpTags = tmp.getTags();
+			size = tmpTags.size();
+			tmpTags.removeAll(uTags);
+			if (size != tmpTags.size()) // there was at least a common tag
 			{
-				if (entry.getKey().equals(username)) continue;
-				tmp = entry.getValue();
-				tmpTags = tmp.getTags();
-				size = tmpTags.size();
-				tmpTags.removeAll(uTags);
-				if (size != tmpTags.size()) // there was at least a common tag
-				{
-					Set<String> tmpTagsNames = new HashSet<>();
-					tmp.getTags().forEach(t -> tmpTagsNames.add(t.name));
-					r.add(tmp.username + "\r\n" + String.join(", ", tmpTagsNames));
-				}
+				Set<String> tmpTagsNames = new HashSet<>();
+				tmp.getTags().forEach(t -> tmpTagsNames.add(t.name));
+				r.add(tmp.username + "\r\n" + String.join(", ", tmpTagsNames));
 			}
 		}
-		finally { lock.readLock().unlock(); }
+
 		return r;
 	}
 
@@ -202,19 +191,15 @@ public class UserMap implements UserRMIStorage, UserStorage
 		User followerUser = null;
 		User followedUser = null;
 		boolean result = false;
-		
-		try
-		{
-			lock.writeLock().lock();
-			followerUser = usersBackedUp.get(followerUsername);
-			followedUser = usersBackedUp.get(followedUsername);
-			if (followerUser == null)
-				throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
-			if (followedUser == null)
-				throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
-			result = followerUser.follow(followedUser);
-		}
-		finally { lock.writeLock().unlock(); }
+
+		followerUser = usersBackedUp.get(followerUsername);
+		followedUser = usersBackedUp.get(followedUsername);
+		if (followerUser == null)
+			throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
+		if (followedUser == null)
+			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+		result = followerUser.follow(followedUser);
+
 		return result;
 	}
 
@@ -245,72 +230,67 @@ public class UserMap implements UserRMIStorage, UserStorage
 		FileOutputStream fos = null;
 		FileChannel c = null;
 
-		try
+		if (usersToBeBackedUp.isEmpty()) return;
+
+		// the file is non-empty:
+		// the closing square bracket is to be deleted.
+		if (!(usersBackedUp.isEmpty()) || flag)
 		{
-			lock.writeLock().lock();
-			if (usersToBeBackedUp.isEmpty()) return;
-
-			// the file is non-empty:
-			// the closing square bracket is to be deleted.
-			if (!(usersBackedUp.isEmpty()) || flag)
-			{
-				File copy = new File("copy-users.json");
-				scanner = new Scanner(usersFile);
-				fos = new FileOutputStream(copy);
-				c = fos.getChannel();
-				flag = false;
-				while(scanner.hasNextLine())
-				{
-					String line = scanner.nextLine();
-					if(!scanner.hasNextLine())
-						line = line.substring(0, line.length() - 1) + "\n";
-					else
-						line = line + "\n";
-					buffer.clear();
-					data = line.getBytes(StandardCharsets.US_ASCII);
-					buffer.put(data);
-					buffer.flip();
-					while (buffer.hasRemaining()) c.write(buffer);
-				}
-				scanner.close();
-				// replace file:
-				from = copy.toPath();
-				to = usersFile.toPath();
-				Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
-				Files.delete(from);
-				c.close();
-				fos.close();
-			}
-
-			fos = new FileOutputStream(usersFile, true);
+			File copy = new File("copy-users.json");
+			scanner = new Scanner(usersFile);
+			fos = new FileOutputStream(copy);
 			c = fos.getChannel();
-
-			if (usersBackedUp.isEmpty()) writeChar(c, '[');
-			else writeChar(c, ',');
-
-			int i = 0;
-			for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
+			flag = false;
+			while(scanner.hasNextLine())
 			{
-				User u = it.next();
-				usersBackedUp.put(u.username, u);
-				data = gson.toJson(u).getBytes();
-				buffer.flip(); buffer.clear();
-				for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
-				{
-					buffer.clear();
-					buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
-					buffer.flip();
-					while (buffer.hasRemaining()) c.write(buffer);
-				}
-				if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
+				String line = scanner.nextLine();
+				if(!scanner.hasNextLine())
+					line = line.substring(0, line.length() - 1) + "\n";
+				else
+					line = line + "\n";
+				buffer.clear();
+				data = line.getBytes(StandardCharsets.US_ASCII);
+				buffer.put(data);
+				buffer.flip();
+				while (buffer.hasRemaining()) c.write(buffer);
 			}
-			writeChar(c, ']');
-			usersToBeBackedUp = new HashMap<>();
-
+			scanner.close();
+			// replace file:
+			from = copy.toPath();
+			to = usersFile.toPath();
+			Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
+			Files.delete(from);
 			c.close();
 			fos.close();
 		}
-		finally { lock.writeLock().unlock(); }
+
+		fos = new FileOutputStream(usersFile, true);
+		c = fos.getChannel();
+
+		if (usersBackedUp.isEmpty()) writeChar(c, '[');
+		else writeChar(c, ',');
+
+		int i = 0;
+		for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
+		{
+			User u = it.next();
+			usersBackedUp.put(u.username, u);
+			data = gson.toJson(u).getBytes();
+			buffer.flip(); buffer.clear();
+			for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
+			{
+				buffer.clear();
+				buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
+				buffer.flip();
+				while (buffer.hasRemaining()) c.write(buffer);
+			}
+			if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
+		}
+		writeChar(c, ']');
+		usersToBeBackedUp = new HashMap<>();
+
+		c.close();
+		fos.close();
 	}
 
 	public void backupFollowing(File followingFile)
@@ -338,32 +318,27 @@ public class UserMap implements UserRMIStorage, UserStorage
 		int i = 0;
 
 		try
+		(
+			final FileOutputStream fos = new FileOutputStream(followingFile, false);
+			final FileChannel c = fos.getChannel()
+		)
 		{
-			lock.readLock().lock();
-			try
-			(
-				final FileOutputStream fos = new FileOutputStream(followingFile, false);
-				final FileChannel c = fos.getChannel()
-			)
+			writeChar(c, '[');
+			for (Iterator<User> it = usersBackedUp.values().iterator(); it.hasNext(); i++)
 			{
-				writeChar(c, '[');
-				for (Iterator<User> it = usersBackedUp.values().iterator(); it.hasNext(); i++)
+				User u = it.next();
+				final byte[] data = gson.toJson(u).getBytes();
+				for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
 				{
-					User u = it.next();
-					final byte[] data = gson.toJson(u).getBytes();
-					for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
-					{
-						buffer.clear();
-						buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
-						buffer.flip();
-						while (buffer.hasRemaining()) c.write(buffer);
-					}
-					if (i < usersBackedUp.size() - 1) writeChar(c, ',');
+					buffer.clear();
+					buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
+					buffer.flip();
+					while (buffer.hasRemaining()) c.write(buffer);
 				}
-				writeChar(c, ']');
+				if (i < usersBackedUp.size() - 1) writeChar(c, ',');
 			}
+			writeChar(c, ']');
 		}
-		finally { lock.readLock().unlock(); }
 	}
 
 	/**

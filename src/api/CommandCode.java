@@ -5,7 +5,6 @@ package api;
  * handled by the server.
  * @author Giacomo Trapani
  */
-
 public enum CommandCode
 {
 	LOGINSETUP("Login setup"),

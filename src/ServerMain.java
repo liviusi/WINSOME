@@ -15,6 +15,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.rmi.RemoteException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +34,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
 import server.BackupTask;
+import server.RMICallbackService;
 import server.RMITask;
 import server.storage.IllegalArchiveException;
 import server.storage.NoSuchUserException;
@@ -76,15 +78,18 @@ public class ServerMain
 		private SelectionKey key = null;
 		private UserStorage users = null;
 		private Map<SocketChannel, String> loggedInClients = null;
+		private RMICallbackService callbackService = null;
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
-				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients)
+				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients,
+				RMICallbackService callbackService)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
 			this.key = key;
 			this.users = users;
 			this.loggedInClients = loggedInClients;
+			this.callbackService = callbackService;
 		}
 
 		public void run()
@@ -184,6 +189,8 @@ public class ServerMain
 							}
 							if (!exceptionCaught)
 							{
+								try { users.recoverFollowers(command[1]).forEach(s -> callbackService.notifyUser(s, command[1])); }
+								catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								try
 								{
 									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
@@ -339,7 +346,7 @@ public class ServerMain
 					{
 						if (loggedInClients.get(client).equals(command[1]))
 						{
-							try { users.handleFollowUser(command[1], command[2]); }
+							try { result = users.handleFollowUser(command[1], command[2]); }
 							catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
 							{
 								exceptionCaught = true;
@@ -363,6 +370,7 @@ public class ServerMain
 								}
 								else
 								{
+									callbackService.notifyUser(command[1], command[2]);
 									try
 									{
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
@@ -543,9 +551,16 @@ public class ServerMain
 			e.printStackTrace();
 			System.exit(1);
 		}
-		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users));
+		RMICallbackService callbackService = null;
+		try  { callbackService = new RMICallbackService(); }
+		catch (RemoteException e)
+		{
+			System.err.println("Fatal error occurred while setting up RMI callbacks.");
+			System.exit(1);
+		}
+		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users, callbackService));
 		rmi.start();
-		Thread backup = new Thread(new BackupTask(new File(USERS_FILENAME), new File("./storage/following.json"), users));
+		Thread backup = new Thread(new BackupTask(configuration, users));
 		backup.start();
 
 		// setting up multiplexing:
@@ -661,7 +676,7 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, loggedInClients)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, loggedInClients, callbackService)));
 					}
 					if (k.isWritable())
 					{
