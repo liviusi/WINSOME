@@ -8,99 +8,111 @@ OUTPUTDIR = -d ./bin
 
 TARGETS = run-client run-server build
 
-.conf-exc:
+.InvalidConfigException:
 	$(JC) $(CP) $(JFLAGS) src/configuration/InvalidConfigException.java $(OUTPUTDIR)
 
-.baseconf: .conf-exc
+.Configuration: .InvalidConfigException
 	$(JC) $(CP) $(JFLAGS) src/configuration/Configuration.java $(OUTPUTDIR)
 
-.servconf: .baseconf
+.ServerConfiguration: .Configuration
 	$(JC) $(CP) $(JFLAGS) src/configuration/ServerConfiguration.java $(OUTPUTDIR)
 
-.psw:
+.Passwords:
 	$(JC) $(CP) $(JFLAGS) src/cryptography/Passwords.java $(OUTPUTDIR)
 
-.tag-exc:
+.InvalidTagException:
 	$(JC) $(CP) $(JFLAGS) src/user/InvalidTagException.java $(OUTPUTDIR)
 
-.tag: .tag-exc
+.Tag: .InvalidTagException
 	$(JC) $(CP) $(JFLAGS) src/user/Tag.java $(OUTPUTDIR)
 
-.login-exc:
+.InvalidLoginException:
 	$(JC) $(CP) $(JFLAGS) src/user/InvalidLoginException.java $(OUTPUTDIR)
 
-.logout-exc:
+.InvalidLogoutException:
 	$(JC) $(CP) $(JFLAGS) src/user/InvalidLogoutException.java $(OUTPUTDIR)
 
-.taglist-exc:
+.TagListTooLongException:
 	$(JC) $(CP) $(JFLAGS) src/user/TagListTooLongException.java $(OUTPUTDIR)
 
-.cred-exc:
+.WrongCredentialsException:
 	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
 
-.user: .psw .tag .login-exc .logout-exc .taglist-exc .cred-exc
+.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException
 	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
 
-.psw-exc:
+.PasswordNotValidException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/PasswordNotValidException.java $(OUTPUTDIR)
 
-.nameexists-exc:
+.UsernameAlreadyExistsException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameAlreadyExistsException.java $(OUTPUTDIR)
 
-.illegalarchive-exc:
+.IllegalArchiveException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/IllegalArchiveException.java $(OUTPUTDIR)
 
-.nosuchuser-exc:
+.NoSuchUserException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/NoSuchUserException.java $(OUTPUTDIR)
 
-.invname-exc:
+.UsernameNotValidException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameNotValidException.java $(OUTPUTDIR)
 
-.userrmistorage: .psw-exc .nameexists-exc .invname-exc .user .nosuchuser-exc
+.UserRMIStorage: .PasswordNotValidException .UsernameAlreadyExistsException .UsernameNotValidException .User .NoSuchUserException
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserRMIStorage.java $(OUTPUTDIR)
 
-.userstorage: .userrmistorage .illegalarchive-exc
+.UserStorage: .UserRMIStorage .IllegalArchiveException
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserStorage.java $(OUTPUTDIR)
 
-.usermap: .userstorage .userrmistorage
+.UserMap: .UserStorage .UserRMIStorage
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserMap.java $(OUTPUTDIR)
 
-.backup: .usermap
+.BackupTask: .UserMap .ServerConfiguration
 	$(JC) $(CP) $(JFLAGS) src/server/BackupTask.java $(OUTPUTDIR)
 
-.rmi-task: .user .usermap
+.RMIFollowers:
+	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
+
+.RMIFollowersMap: .RMIFollowers
+	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowersMap.java $(OUTPUTDIR)
+
+.RMICallback: .RMIFollowers
+	$(JC) $(CP) $(JFLAGS) src/server/RMICallback.java $(OUTPUTDIR)
+
+.RMICallbackService: .RMICallback
+	$(JC) $(CP) $(JFLAGS) src/server/RMICallbackService.java $(OUTPUTDIR)
+
+.RMITask: .User .UserMap .RMICallbackService
 	$(JC) $(CP) $(JFLAGS) src/server/RMITask.java $(OUTPUTDIR)
 
-.apiconstants:
+.Constants:
 	$(JC) $(CP) $(JFLAGS) src/api/Constants.java $(OUTPUTDIR)
 
-.apicodes:
+.CommandCode:
 	$(JC) $(CP) $(JFLAGS) src/api/CommandCode.java $(OUTPUTDIR)
 
-.rc:
+.ResponseCode:
 	$(JC) $(CP) $(JFLAGS) src/api/ResponseCode.java $(OUTPUTDIR)
 
-.response: .rc
+.Response: .ResponseCode
 	$(JC) $(CP) $(JFLAGS) src/api/Response.java $(OUTPUTDIR)
 
-.communication:
+.Communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.clientapi: .servconf .apiconstants .apicodes .communication .rc .response
+.Command: .ServerConfiguration .Constants .CommandCode .Communication .ResponseCode .Response
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
-.client: .clientapi
+ClientMain: .Command .RMIFollowersMap .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-.server: .servconf .psw .user .rmi-task .apiconstants .apicodes .backup .communication .rc
+ServerMain: .ServerConfiguration .Passwords .User .RMITask .Constants .CommandCode .BackupTask .Communication .ResponseCode
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
-build: .server .client
+build: ServerMain ClientMain
 
-run-client: .client
+run-client: ClientMain
 	java $(CP) ClientMain
 
-run-server: .server
+run-server: ServerMain
 	java $(CP) ServerMain
 
 clean:
