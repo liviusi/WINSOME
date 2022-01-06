@@ -58,6 +58,7 @@ public class BackupTask implements Runnable
 			catch (IOException e)
 			{
 				System.err.printf("Fatal error occurred in BackupTask:\n%s\n", e.getMessage());
+				e.printStackTrace();
 				System.exit(1);
 			}
 		}

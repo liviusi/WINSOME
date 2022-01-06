@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -49,6 +48,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 	private Map<String, User> usersToBeBackedUp = null;
 	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
 	private boolean flag = false;
+	/** Maps a tag to the set of the users currently interested in it. */
+	private Map<Tag, Set<User>> interestsMap = null;
+	/** Maps a user to the set of users currently following it. */
+	private Map<User, Set<User>> followersMap = null;
 
 	/** Empty string. */
 	private static final String EMPTY_STRING = "";
@@ -63,6 +66,8 @@ public class UserMap implements UserRMIStorage, UserStorage
 		usersBackedUp = new ConcurrentHashMap<>();
 		usersToBeBackedUp = new ConcurrentHashMap<>();
 		flag = false;
+		interestsMap = new ConcurrentHashMap<>();
+		followersMap = new ConcurrentHashMap<>();
 	}
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
@@ -76,7 +81,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		final String EMPTY_ERROR = " cannot be empty.";
 		String emptyStringHashed = null;
-		User u = null;
+		final User u;
 
 		if (username.isEmpty()) throw new UsernameNotValidException("Username" + EMPTY_ERROR);
 		emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.US_ASCII), salt);
@@ -85,21 +90,26 @@ public class UserMap implements UserRMIStorage, UserStorage
 		if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
 			throw new UsernameAlreadyExistsException("Username has already been taken.");
 		usersToBeBackedUp.put(username, u);
+		u.getTags().forEach(t -> new HashSet<>(interestsMap.get(t)).add(u));
+		followersMap.put(u, new HashSet<>());
 	}
 
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		if (usersBackedUp.get(username) == usersToBeBackedUp.get(username))
-			throw new NoSuchUserException(username + " has yet to sign up.");
+
+		User u = null;
+
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
 		
-		return usersBackedUp.values().stream()
-				.filter(u -> u.getFollowing().contains(username))
-				.map(u -> u.username + "\r\n" + String.join(", ",
-					u.getTags().stream().map(t -> t.name)
-					.collect(Collectors.toSet())))
-				.collect(Collectors.toSet());
+		return followersMap.get(u).stream().map(follower ->
+				follower.username + "\r\n" +
+				String.join(", ", follower.getTags().stream()
+					.map(t -> t.name).collect(Collectors.toSet()))
+			).collect(Collectors.toSet());
 	}
 
 	public String handleLoginSetup(final String username)
@@ -154,29 +164,20 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		Set<String> r = new HashSet<>();
 		User u = null;
-		Set<Tag> uTags = null;
-		User tmp = null;
-		Set<Tag> tmpTags = null;
-		int size = -1;
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
 		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
-		uTags = u.getTags();
-		for (Entry<String, User> entry: usersBackedUp.entrySet())
-		{
-			if (entry.getKey().equals(username)) continue;
-			tmp = entry.getValue();
-			tmpTags = tmp.getTags();
-			size = tmpTags.size();
-			tmpTags.removeAll(uTags);
-			if (size != tmpTags.size()) // there was at least a common tag
+		u.getTags().forEach(t ->
+			interestsMap.get(t).forEach(tUser ->
 			{
-				Set<String> tmpTagsNames = new HashSet<>();
-				tmp.getTags().forEach(t -> tmpTagsNames.add(t.name));
-				r.add(tmp.username + "\r\n" + String.join(", ", tmpTagsNames));
-			}
-		}
+				if (!tUser.username.equals(username))
+				{
+					r.add(tUser.username + "\r\n" +
+						String.join(", ", tUser.getTags().stream().map(uTag -> uTag.name).collect(Collectors.toSet())));
+				}
+			})
+		);
 
 		return r;
 	}
@@ -199,6 +200,12 @@ public class UserMap implements UserRMIStorage, UserStorage
 		if (followedUser == null)
 			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
 		result = followerUser.follow(followedUser);
+		if (result)
+		{
+			if (followersMap.get(followedUser) == null)
+				followersMap.put(followedUser, new HashSet<>());
+			followersMap.get(followedUser).add(followerUser);
+		}
 
 		return result;
 	}
@@ -264,6 +271,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 			fos.close();
 		}
 
+		usersFile.mkdirs();
 		fos = new FileOutputStream(usersFile, true);
 		c = fos.getChannel();
 
@@ -317,6 +325,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		int i = 0;
 
+		followingFile.mkdirs();
 		try
 		(
 			final FileOutputStream fos = new FileOutputStream(followingFile, false);
@@ -373,6 +382,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 			String hashPassword = null;
 			byte[] saltDecoded = null;
 			Set<String> tags = null;
+			User u = null;
 			for (int i = 0; i < 4; i++)
 			{
 				name = reader.nextName();
@@ -410,8 +420,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 				}
 			}
 			reader.endObject();
-			try { map.usersBackedUp.put(username, new User(username, hashPassword, tags, saltDecoded)); }
-			catch (InvalidTagException | TagListTooLongException doNotAddUser) { }
+			try { u = new User(username, hashPassword, tags, saltDecoded); }
+			catch (InvalidTagException | TagListTooLongException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			map.usersBackedUp.put(username, u);
+			map.followersMap.put(u, new HashSet<>());
 		}
 		reader.endArray();
 		reader.close();
@@ -455,6 +467,23 @@ public class UserMap implements UserRMIStorage, UserStorage
 		reader.endArray();
 		reader.close();
 		is.close();
+
+		for (User u: map.usersBackedUp.values())
+		{
+			for (Tag t: u.getTags())
+			{
+				if (map.interestsMap.get(t) == null)
+					map.interestsMap.put(t, new HashSet<>());
+				map.interestsMap.get(t).add(u);
+			}
+			for (String s: u.getFollowing())
+			{
+				User followed = map.usersBackedUp.get(s);
+				if (map.followersMap.get(followed) == null)
+					map.followersMap.put(followed, new HashSet<>());
+				map.followersMap.get(followed).add(u);
+			}
+		}
 		return map;
 	}
 
