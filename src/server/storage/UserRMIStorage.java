@@ -5,6 +5,7 @@ import java.rmi.RemoteException;
 import java.util.Set;
 
 import user.InvalidTagException;
+import user.InvalidUsernameException;
 import user.TagListTooLongException;
 
 /**
@@ -31,5 +32,5 @@ public interface UserRMIStorage extends Remote
 	 */
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException, TagListTooLongException;
+		PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException;
 }
