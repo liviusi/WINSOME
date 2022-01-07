@@ -18,6 +18,7 @@ import server.storage.UserRMIStorage;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
 import user.InvalidTagException;
+import user.InvalidUsernameException;
 import user.TagListTooLongException;
 
 /**
@@ -51,7 +52,7 @@ public class Command
 	 */
 	public static void register(String username, String password, Set<String> tags, int portNo, String serviceName, boolean verbose)
 	throws RemoteException, NotBoundException, NullPointerException, UsernameNotValidException, UsernameAlreadyExistsException,
-			PasswordNotValidException, InvalidTagException, TagListTooLongException
+			PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException
 	{
 		Registry r = LocateRegistry.getRegistry(portNo);
 		UserRMIStorage service = (UserRMIStorage) r.lookup(Objects.requireNonNull(serviceName, "Service to search for cannot be null."));
@@ -160,7 +161,7 @@ public class Command
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
-	 * @param dest cannot be null, it will contain the usernames of the users sharing at least a common interest with username.
+	 * @param dest cannot be null, it will contain the usernames of the users sharing at least a common interest with username and their interests.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
@@ -204,6 +205,57 @@ public class Command
 			return 1;
 		}
 	}
+
+	/**
+	 * @brief Lists out all the users on WINSOME the caller is currently following.
+	 * @param username cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @param dest cannot be null, it will contain the usernames of the users username is currently following and their interests.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
+	public static int listFollowing(String username, SocketChannel server, boolean verbose, Set<String> dest)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> r = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.LISTFOLLOWING.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
+		r = Response.parseAnswer(baos.toByteArray());
+		if (r == null)
+		{
+			Response<String> retry = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (retry == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(retry, verbose);
+				return 1;
+			}
+		}
+		if (r.code == ResponseCode.OK)
+		{
+			for (String s: r.body) dest.add(s);
+			return 0;
+		}
+		else
+		{
+			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
+			return 1;
+		}
+	}
+
 
 	/**
 	 * @brief Starts following a user on WINSOME.
