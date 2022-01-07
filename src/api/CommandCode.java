@@ -11,6 +11,7 @@ public enum CommandCode
 	LOGINATTEMPT("Login"),
 	LOGOUT("Logout"),
 	LISTUSERS("List users"),
+	LISTFOLLOWING("List following"),
 	FOLLOWUSER("Follow");
 
 	/** Used to represent the command as a string. */
