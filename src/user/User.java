@@ -41,11 +41,12 @@ public class User
 	 * @throws TagListTooLongException if the set of tags has more than 5 elements.
 	 */
 	public User(final String username, final String hashPassword, Set<String> tags, final byte[] saltUsed)
-	throws NullPointerException, InvalidTagException, TagListTooLongException
+	throws NullPointerException, InvalidTagException, TagListTooLongException, InvalidUsernameException
 	{
 		Objects.requireNonNull(tags, "Tags" + NULL_ERROR);
 		Objects.requireNonNull(saltUsed, "Salt" + NULL_ERROR);
 		this.username = Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		if (this.username.contains("\r\n")) throw new InvalidUsernameException("User's username cannot contain CRLF.");
 		this.hashPassword = Objects.requireNonNull(hashPassword, "Hashed password" + NULL_ERROR);
 		this.tags = new HashSet<>();
 		for (String t : tags)
@@ -136,6 +137,26 @@ public class User
 		{
 			if (u.equals(this)) return false;
 			result = following.add(u.username);
+		}
+		return result;
+	}
+
+	/**
+	 * @brief Has this user stop following u.
+	 * @param u cannot be null.
+	 * @return true on success, false on failure. This function may fail if this user is not following
+	 * u or this user and u are the very same user.
+	 * @throws NullPointerException if u is null.
+	 */
+	public boolean unfollow(User u)
+	throws NullPointerException
+	{
+		Objects.requireNonNull(u, "User cannot be null");
+		boolean result = false;
+		synchronized(this)
+		{
+			if (u.equals(this)) return false;
+			result = following.remove(u.username);
 		}
 		return result;
 	}
