@@ -11,7 +11,7 @@ import user.InvalidLogoutException;
 import user.WrongCredentialsException;
 
 /**
- * @brief Interface to be implemented by an actual storage class.
+ * @brief Interface to be implemented by an actual user storage class.
  * @author Giacomo Trapani
  */
 public interface UserStorage
@@ -25,6 +25,13 @@ public interface UserStorage
 	 */
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException;
+
+	/**
+	 * @brief Checks whether given username belongs to one registered.
+	 * @param username cannot be null.
+	 * @return true on success, false on failure.
+	 */
+	public boolean userIsRegistered(final String username);
 
 	/**
 	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt
@@ -75,6 +82,17 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
+	 * @brief Handles list following.
+	 * @param username cannot be null, must belong to WINSOME registered users' set.
+	 * @return a set of string following the format CONCAT(USERNAME, "\r\n", TAG_{1},...,TAG_{n}) with USERNAME
+	 * representing the username of a user the one in input is following and TAG_{i} the i-th tag USERNAME is interested in.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if username is null.
+	 */
+	public Set<String> handleListFollowing(final String username)
+	throws NoSuchUserException, NullPointerException;
+
+	/**
 	 * @brief Handles follow user.
 	 * @param followerUsername cannot be null, must belong to WINSOME registered users' set.
 	 * @param followedUsername cannot be null, must belong to WINSOME registered users' set.
@@ -83,6 +101,17 @@ public interface UserStorage
 	 * @throws NullPointerException if any parameter is null.
 	 */
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
+	throws NoSuchUserException, NullPointerException;
+
+	/**
+	 * @brief Handles unfollow user.
+	 * @param followerUsername cannot be null, must belong to WINSOME registered users' set.
+	 * @param followedUsername cannot be null, must belong to WINSOME registered users' set.
+	 * @return true on success, false on failure.
+	 * @throws NoSuchUserException if at least one of the usernames specified does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if any parameter is null.
+	 */
+	public boolean handleUnfollowUser(final String followerUsername, final String followedUsername)
 	throws NoSuchUserException, NullPointerException;
 
 	/**
