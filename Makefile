@@ -32,14 +32,35 @@ TARGETS = run-client run-server build
 .InvalidLogoutException:
 	$(JC) $(CP) $(JFLAGS) src/user/InvalidLogoutException.java $(OUTPUTDIR)
 
+.InvalidUsernameException:
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidUsernameException.java $(OUTPUTDIR)
+
 .TagListTooLongException:
 	$(JC) $(CP) $(JFLAGS) src/user/TagListTooLongException.java $(OUTPUTDIR)
 
 .WrongCredentialsException:
 	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
 
-.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException
+.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .InvalidUsernameException
 	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
+
+.InvalidCommentException:
+	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidCommentException.java $(OUTPUTDIR)
+
+.InvalidGeneratorException:
+	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidGeneratorException.java $(OUTPUTDIR)
+
+InvalidPostException:
+	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidPostException.java $(OUTPUTDIR)
+
+InvalidVoteException:
+	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidVoteException.java $(OUTPUTDIR)
+
+.Post: .InvalidCommentException .InvalidGeneratorException .InvalidPostException .InvalidVoteException
+	$(JC) $(CP) $(JFLAGS) src/server/post/Post.java $(OUTPUTDIR)
+
+.RewinPost: .Post
+	$(JC) $(CP) $(JFLAGS) src/server/post/RewinPost.java $(OUTPUTDIR)
 
 .PasswordNotValidException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/PasswordNotValidException.java $(OUTPUTDIR)
@@ -59,7 +80,10 @@ TARGETS = run-client run-server build
 .UserRMIStorage: .PasswordNotValidException .UsernameAlreadyExistsException .UsernameNotValidException .User .NoSuchUserException
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserRMIStorage.java $(OUTPUTDIR)
 
-.UserStorage: .UserRMIStorage .IllegalArchiveException
+.Storage:
+	$(JC) $(CP) $(JFLAGS) src/server/storage/Storage.java $(OUTPUTDIR)
+
+.UserStorage: .UserRMIStorage .IllegalArchiveException .Storage
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserStorage.java $(OUTPUTDIR)
 
 .UserMap: .UserStorage .UserRMIStorage
