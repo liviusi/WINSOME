@@ -3,44 +3,33 @@ package server.storage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.rmi.RemoteException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
 
 import cryptography.Passwords;
 import user.*;
 
 /**
- * @brief User storage backed up by a hashmap. This class is thread-safe.
+ * @brief User storage backed by a hashmap. This class is thread-safe.
  * @author Giacomo Trapani
  */
-public class UserMap implements UserRMIStorage, UserStorage
+public class UserMap extends Storage implements UserRMIStorage, UserStorage
 {
 	/** Users already stored inside backup file. */
 	private Map<String, User> usersBackedUp = null; // already backed up
@@ -55,10 +44,10 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 	/** Empty string. */
 	private static final String EMPTY_STRING = "";
-	/** Default ByteBuffer size. */
-	private static final int BUFFERSIZE = 1024;
 	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_PARAM_ERROR = " cannot be null.";
+	/** Part of the exception message when a user cannot be find in the storage. */
+	private static final String NOT_SIGNED_UP = " has yet to sign up.";
 
 	/** Default constructor. */
 	public UserMap()
@@ -72,7 +61,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException, TagListTooLongException
+		PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(password, "Password" + NULL_PARAM_ERROR);
@@ -90,7 +79,12 @@ public class UserMap implements UserRMIStorage, UserStorage
 		if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
 			throw new UsernameAlreadyExistsException("Username has already been taken.");
 		usersToBeBackedUp.put(username, u);
-		u.getTags().forEach(t -> new HashSet<>(interestsMap.get(t)).add(u));
+		u.getTags().forEach(t -> 
+		{
+			if (interestsMap.get(t) == null)
+				interestsMap.put(t, new HashSet<>());
+			interestsMap.get(t).add(u);
+		});
 		followersMap.put(u, new HashSet<>());
 	}
 
@@ -103,13 +97,20 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		
-		return followersMap.get(u).stream().map(follower ->
-				follower.username + "\r\n" +
-				String.join(", ", follower.getTags().stream()
-					.map(t -> t.name).collect(Collectors.toSet()))
-			).collect(Collectors.toSet());
+		return followersMap.get(u)
+			.stream()
+			.map(follower ->
+				follower.username + "\r\n" + tagsToString(follower.getTags()))
+			.collect(Collectors.toSet());
+	}
+
+	public boolean userIsRegistered(final String username)
+	{
+		if (usersBackedUp.get(username) == null)
+			if (usersToBeBackedUp.get(username) != null) return true;
+		return false;
 	}
 
 	public String handleLoginSetup(final String username)
@@ -122,7 +123,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		saltDecoded = u.saltDecoded;
 
 		return saltDecoded;
@@ -139,7 +140,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		u.login(clientID, hashPassword);
 	}
 
@@ -153,7 +154,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		u.logout(clientID);
 	}
 
@@ -167,19 +168,42 @@ public class UserMap implements UserRMIStorage, UserStorage
 
 		u = usersBackedUp.get(username);
 		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + " has yet to sign up.");
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		u.getTags().forEach(t ->
 			interestsMap.get(t).forEach(tUser ->
 			{
 				if (!tUser.username.equals(username))
 				{
-					r.add(tUser.username + "\r\n" +
-						String.join(", ", tUser.getTags().stream().map(uTag -> uTag.name).collect(Collectors.toSet())));
+					r.add(tUser.username + "\r\n" + tagsToString(tUser.getTags()));
 				}
 			})
 		);
 
 		return r;
+	}
+
+	public Set<String> handleListFollowing(final String username)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+
+		Set<String> r = new HashSet<>();
+		User u = null;
+
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		u.getFollowing().forEach(following ->
+			{
+				System.out.println(username + " is following " + following);
+				User tmp = usersBackedUp.get(following);
+				if (tmp == null) tmp = usersToBeBackedUp.get(following);
+				r.add(following + "\r\n" + tagsToString(tmp.getTags()));
+			}
+		);
+
+		return r;
+		
 	}
 
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
@@ -210,144 +234,72 @@ public class UserMap implements UserRMIStorage, UserStorage
 		return result;
 	}
 
+	public boolean handleUnfollowUser(final String followerUsername, final String followedUsername)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
+
+		final String NO_USER_ERROR = "No user could be found for given name: ";
+		User followerUser = null;
+		User followedUser = null;
+		boolean result = false;
+
+		followerUser = usersBackedUp.get(followerUsername);
+		followedUser = usersBackedUp.get(followedUsername);
+		if (followerUser == null)
+			throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
+		if (followedUser == null)
+			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+		result = followerUser.unfollow(followedUser);
+		if (result)
+		{
+			if (followersMap.get(followedUser) != null)
+				followersMap.get(followedUser).remove(followerUser);
+		}
+
+		return result;
+	}
+
 	public void backupUsers(final File usersFile)
 	throws FileNotFoundException, IOException
 	{
-		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy()
+		Map<String, User> tmp = new HashMap<>(usersToBeBackedUp);
+		usersToBeBackedUp = new ConcurrentHashMap<>();
+		backupCached(new ExclusionStrategy()
 		{
-			@Override
 			public boolean shouldSkipField(FieldAttributes f)
 			{
 				// skips "following" field specified inside User class.
 				return f.getDeclaringClass() == User.class && f.getName().equals("following");
 			}
 
-			@Override
 			public boolean shouldSkipClass(Class<?> clazz)
 			{
 				return false;
 			}
-		}).create();
-
-		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
-		byte[] data = null;
-		Path from = null;
-		Path to = null;
-		Scanner scanner = null;
-		FileOutputStream fos = null;
-		FileChannel c = null;
-
-		if (usersToBeBackedUp.isEmpty()) return;
-
-		// the file is non-empty:
-		// the closing square bracket is to be deleted.
-		if (!(usersBackedUp.isEmpty()) || flag)
-		{
-			File copy = new File("copy-users.json");
-			scanner = new Scanner(usersFile);
-			fos = new FileOutputStream(copy);
-			c = fos.getChannel();
-			flag = false;
-			while(scanner.hasNextLine())
-			{
-				String line = scanner.nextLine();
-				if(!scanner.hasNextLine())
-					line = line.substring(0, line.length() - 1) + "\n";
-				else
-					line = line + "\n";
-				buffer.clear();
-				data = line.getBytes(StandardCharsets.US_ASCII);
-				buffer.put(data);
-				buffer.flip();
-				while (buffer.hasRemaining()) c.write(buffer);
-			}
-			scanner.close();
-			// replace file:
-			from = copy.toPath();
-			to = usersFile.toPath();
-			Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
-			Files.delete(from);
-			c.close();
-			fos.close();
-		}
-
-		usersFile.mkdirs();
-		fos = new FileOutputStream(usersFile, true);
-		c = fos.getChannel();
-
-		if (usersBackedUp.isEmpty()) writeChar(c, '[');
-		else writeChar(c, ',');
-
-		int i = 0;
-		for (Iterator<User> it = usersToBeBackedUp.values().iterator(); it.hasNext(); i++)
-		{
-			User u = it.next();
-			usersBackedUp.put(u.username, u);
-			data = gson.toJson(u).getBytes();
-			buffer.flip(); buffer.clear();
-			for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
-			{
-				buffer.clear();
-				buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
-				buffer.flip();
-				while (buffer.hasRemaining()) c.write(buffer);
-			}
-			if (i < usersToBeBackedUp.size() - 1) writeChar(c, ',');
-		}
-		writeChar(c, ']');
-		usersToBeBackedUp = new HashMap<>();
-
-		c.close();
-		fos.close();
+		}, usersFile, usersBackedUp, tmp, flag);
+		flag = false;
 	}
 
 	public void backupFollowing(File followingFile)
 	throws FileNotFoundException, IOException
 	{
-		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy()
+		backupNonCached(new ExclusionStrategy()
 		{
-			@Override
 			public boolean shouldSkipField(FieldAttributes f)
 			{
 				// skips everything except username and following field
 				return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
 						!f.getName().equals("username");
 			}
-
-			@Override
+			
 			public boolean shouldSkipClass(Class<?> clazz)
 			{
 				return false;
 			}
-			
-		}).create();
+		}, followingFile, usersBackedUp);
 
-		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
-		int i = 0;
-
-		followingFile.mkdirs();
-		try
-		(
-			final FileOutputStream fos = new FileOutputStream(followingFile, false);
-			final FileChannel c = fos.getChannel()
-		)
-		{
-			writeChar(c, '[');
-			for (Iterator<User> it = usersBackedUp.values().iterator(); it.hasNext(); i++)
-			{
-				User u = it.next();
-				final byte[] data = gson.toJson(u).getBytes();
-				for (int offset = 0; offset < data.length; offset += BUFFERSIZE)
-				{
-					buffer.clear();
-					buffer.put(data, offset, Math.min(BUFFERSIZE, data.length - offset));
-					buffer.flip();
-					while (buffer.hasRemaining()) c.write(buffer);
-				}
-				if (i < usersBackedUp.size() - 1) writeChar(c, ',');
-			}
-			writeChar(c, ']');
-		}
 	}
 
 	/**
@@ -421,7 +373,7 @@ public class UserMap implements UserRMIStorage, UserStorage
 			}
 			reader.endObject();
 			try { u = new User(username, hashPassword, tags, saltDecoded); }
-			catch (InvalidTagException | TagListTooLongException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			catch (InvalidTagException | TagListTooLongException | InvalidUsernameException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			map.usersBackedUp.put(username, u);
 			map.followersMap.put(u, new HashSet<>());
 		}
@@ -487,19 +439,9 @@ public class UserMap implements UserRMIStorage, UserStorage
 		return map;
 	}
 
-	/**
-	 * @brief Writes a single character onto the channel.
-	 * @param channel pointer to the channel to write on
-	 * @param c character to write
-	 * @throws IOException if I/O error(s) occur.
-	 * @author Matteo Loporchio
-	 */
-	private static void writeChar(FileChannel channel, char c)
-	throws IOException
+	/** Converts set of tags to CSV format. */
+	private static String tagsToString(Set<Tag> set)
 	{
-		CharBuffer charBuffer = CharBuffer.wrap(new char[]{c});
-		ByteBuffer byteBuffer = StandardCharsets.US_ASCII.encode(charBuffer);
-		// Leggo il contenuto del buffer e lo scrivo sul canale.
-		channel.write(byteBuffer);
+		return String.join(", ", set.stream().map(t -> t.name).collect(Collectors.toSet()));
 	}
 }
