@@ -20,6 +20,7 @@ public class ServerConfiguration extends Configuration
 	private static final String THREADPOOLTIMEOUT_STRING = "THREADPOOLTIMEOUT";
 	private static final String USERSTORAGE_STRING = "USERSTORAGE";
 	private static final String FOLLOWINGSTORAGE_STRING = "FOLLOWINGSTORAGE";
+	private static final String POSTSSTORAGE_STRING = "POSTSSTORAGE";
 
 	/** Socket timeout value. */
 	public final int socketTimeout;
@@ -31,10 +32,12 @@ public class ServerConfiguration extends Configuration
 	public final int keepAliveTime;
 	/** Thread pool timeout value. */
 	public final int threadPoolTimeout;
-	/** Filename users are to be stored in. */
+	/** Filename of the file users are to be stored in. */
 	public final String userStorageFilename;
-	/** Filename users and the users they are following are to be stored in. */
+	/** Filename of the file users and the users they are following are to be stored in. */
 	public final String followingStorageFilename;
+	/** Filename of the file posts are to be stored in. */
+	public final String postStorageFilename;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -55,7 +58,7 @@ public class ServerConfiguration extends Configuration
 		if (properties.containsKey(SOCKETTIMEOUT_STRING) && properties.containsKey(COREPOOLSIZE_STRING) &&
 			properties.containsKey(MAXIMUMPOOLSIZE_STRING) && properties.containsKey(KEEPALIVETIME_STRING) &&
 			properties.containsKey(THREADPOOLTIMEOUT_STRING) && properties.containsKey(USERSTORAGE_STRING) &&
-			properties.containsKey(FOLLOWINGSTORAGE_STRING))
+			properties.containsKey(FOLLOWINGSTORAGE_STRING) && properties.containsKey(POSTSSTORAGE_STRING))
 		{
 			// validating socket timeout:
 			try
@@ -95,6 +98,7 @@ public class ServerConfiguration extends Configuration
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);
 			followingStorageFilename = properties.getProperty(FOLLOWINGSTORAGE_STRING);
+			postStorageFilename = properties.getProperty(POSTSSTORAGE_STRING);
 			return;
 		}
 		else
