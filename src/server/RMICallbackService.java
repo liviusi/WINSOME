@@ -40,23 +40,40 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 	 * @param followed cannot be null.
 	 * @throws NullPointerException if any parameter is null.
 	 */
-	public void notifyUser(String follower, String followed)
+	public void notifyNewFollower(String follower, String followed)
 	throws NullPointerException
 	{
-		doCallBacks(Objects.requireNonNull(follower, "Follower user's username" + NULL_ERROR),
-				Objects.requireNonNull(followed, "Followed user's username" + NULL_ERROR));
+		Objects.requireNonNull(follower, "Follower user's username" + NULL_ERROR);
+		Objects.requireNonNull(followed, "Followed user's username" + NULL_ERROR);
+
+		synchronized(this)
+		{
+			for (RMIFollowers c: clients)
+			{
+				try { c.registerNewFollower(follower, followed); }
+				catch (RemoteException clientDisconnected) { toDelete.add(c); }
+			}
+			for (RMIFollowers c: toDelete)
+				clients.remove(c);
+			toDelete = new HashSet<>();
+		}
 	}
 
-	/** Registers new follower, removes any disconnected client. */
-	private synchronized void doCallBacks(String follower, String followed)
+	public void notifyUnfollow(final String follower, final String followed)
 	{
-		for (RMIFollowers c: clients)
+		Objects.requireNonNull(follower, "Follower user's username" + NULL_ERROR);
+		Objects.requireNonNull(followed, "Followed user's username" + NULL_ERROR);
+
+		synchronized(this)
 		{
-			try { c.registerNewFollower(follower, followed); }
-			catch (RemoteException clientDisconnected) { toDelete.add(c); }
+			for (RMIFollowers c: clients)
+			{
+				try { c.removeFollower(follower, followed); }
+				catch (RemoteException clientDisconnected) { toDelete.add(c); }
+			}
+			for (RMIFollowers c: toDelete)
+				clients.remove(c);
+			toDelete = new HashSet<>();
 		}
-		for (RMIFollowers c: toDelete)
-			clients.remove(c);
-		toDelete = new HashSet<>();
 	}
 }

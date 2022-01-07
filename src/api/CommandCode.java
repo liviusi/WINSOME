@@ -12,7 +12,8 @@ public enum CommandCode
 	LOGOUT("Logout"),
 	LISTUSERS("List users"),
 	LISTFOLLOWING("List following"),
-	FOLLOWUSER("Follow");
+	FOLLOWUSER("Follow"),
+	UNFOLLOWUSER("Unfollow");
 
 	/** Used to represent the command as a string. */
 	private String description;

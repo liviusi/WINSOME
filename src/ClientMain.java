@@ -151,7 +151,7 @@ public class ClientMain
 					}
 
 					String[] tmp = null;
-					if (resultSet.isEmpty()) System.out.println(loggedInUsername + " is not following any user.");
+					if (resultSet.isEmpty()) System.out.println(loggedInUsername + " is not followed by any user.");
 					else
 					{
 						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
@@ -159,7 +159,9 @@ public class ClientMain
 						for (String u: resultSet)
 						{
 							tmp = u.split("\r\n");
-							System.out.println(String.format("< %30s %25s %10s", tmp[0], "|", tmp[1]));
+							if (tmp.length == 2)
+								System.out.println(String.format("< %30s %25s %10s", tmp[0], "|", tmp[1]));
+							else System.err.println("ERROR " + u);
 						}
 					}
 					continue;
@@ -200,76 +202,8 @@ public class ClientMain
 						continue;
 					}
 				}
-				String[] command = s.split(" ");
-				if (command[0].equals(Constants.REGISTER_STRING))
+				if (s.equals(Constants.LOGOUT_STRING))
 				{
-					int len = command.length;
-					if (len < 3)
-					{
-						System.err.println(INVALID_SYNTAX);
-						continue;
-					}
-					Set<String> tags = new HashSet<>();
-					for (int i = 3; i < len; i++)
-						tags.add(command[i]);
-					try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
-					catch (RemoteException | NotBoundException e)
-					{
-						System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
-						System.exit(1);
-					}
-					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException | InvalidUsernameException e)
-					{
-						System.err.printf("Given credentials do not meet the requirements:\n%s\n", e.getMessage());
-						continue;
-					}
-					catch (NullPointerException e)
-					{
-						System.err.printf("Exception occurred during registration:\n%s\n", e.getMessage());
-						continue;
-					}
-					catch (UsernameAlreadyExistsException e)
-					{
-						System.err.printf("Username has already been taken.\n");
-						continue;
-					}
-					continue;
-				}
-				if (command[0].equals(Constants.LOGIN_STRING))
-				{
-					int len = command.length;
-					if (len != 3)
-					{
-						System.err.println(INVALID_SYNTAX);
-						continue;
-					}
-					try { result = Command.login(command[1], command[2], client, true); }
-					catch (IOException e)
-					{
-						e.printStackTrace();
-						break loop;
-					}
-					if (result == -1)
-					{
-						System.err.println(SERVER_DISCONNECT);
-						break loop;
-					}
-					if (result == 0 && !loggedIn)
-					{
-						loggedIn = true;
-						loggedInUsername = command[1];
-						System.out.println("< " + command[1] + LOGIN_SUCCESS);
-					}
-					continue;
-				}
-				if (command[0].equals(Constants.LOGOUT_STRING))
-				{
-					int len = command.length;
-					if (len != 1)
-					{
-						System.err.println(INVALID_SYNTAX);
-						continue;
-					}
 					try
 					{
 						result = Command.logout(loggedInUsername, client, true);
@@ -298,8 +232,74 @@ public class ClientMain
 					}
 					continue;
 				}
+				String[] command = s.split(" ");
+				if (command[0].equals(Constants.REGISTER_STRING))
+				{
+					int len = command.length;
+					if (len < 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue;
+					}
+					Set<String> tags = new HashSet<>();
+					for (int i = 3; i < len; i++)
+						tags.add(command[i]);
+					try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
+					catch (RemoteException | NotBoundException e)
+					{
+						System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
+						break loop;
+					}
+					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException | InvalidUsernameException e)
+					{
+						System.err.printf("Given credentials do not meet the requirements:\n%s\n", e.getMessage());
+						continue;
+					}
+					catch (NullPointerException e)
+					{
+						System.err.printf("Exception occurred during registration:\n%s\n", e.getMessage());
+						continue;
+					}
+					catch (UsernameAlreadyExistsException e)
+					{
+						System.err.printf("Username has already been taken.\n");
+						continue;
+					}
+					continue;
+				}
+				if (command[0].equals(Constants.LOGIN_STRING))
+				{
+					if (command.length != 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue;
+					}
+					try { result = Command.login(command[1], command[2], client, true); }
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+					if (result == -1)
+					{
+						System.err.println(SERVER_DISCONNECT);
+						break loop;
+					}
+					if (result == 0 && !loggedIn)
+					{
+						loggedIn = true;
+						loggedInUsername = command[1];
+						System.out.println("< " + command[1] + LOGIN_SUCCESS);
+					}
+					continue;
+				}
 				if (command[0].equals(Constants.FOLLOW_USER_STRING))
 				{
+					if (command.length != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue;
+					}
 					try { result = Command.followUser(loggedInUsername, command[1], client, true); }
 					catch (NullPointerException e)
 					{
@@ -311,6 +311,30 @@ public class ClientMain
 					{
 						e.printStackTrace();
 						break loop;
+					}
+					continue;
+				}
+				if (command[0].equals(Constants.UNFOLLOW_USER_STRING))
+				{
+					if (command.length != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue;
+					}
+					try { result = Command.unfollowUser(loggedInUsername, command[1], client, true); }
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue;
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+					if (result == 0)
+					{
+						System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
 					}
 				}
 			}

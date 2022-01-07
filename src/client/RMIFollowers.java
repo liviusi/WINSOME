@@ -7,7 +7,6 @@ import java.rmi.RemoteException;
  * @brief Client interface for RMI callbacks.
  * @author Giacomo Trapani
  */
-@FunctionalInterface
 public interface RMIFollowers extends Remote
 {
 
@@ -19,5 +18,8 @@ public interface RMIFollowers extends Remote
 	 * @throws RemoteException if a remote error occurs.
 	 */
 	public void registerNewFollower(String follower, String followed)
+	throws NullPointerException, RemoteException;
+
+	public void removeFollower(final String follower, final String followed)
 	throws NullPointerException, RemoteException;
 }

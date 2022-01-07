@@ -295,6 +295,34 @@ public class Command
 		}
 	}
 
+	public static int unfollowUser(final String follower, final String followed, final SocketChannel server, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(follower, "Username" + NULL_ERROR);
+		Objects.requireNonNull(followed, "User to be unfollowed's username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.UNFOLLOWUSER.getDescription() + Constants.DELIMITER + follower + Constants.DELIMITER + followed).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
 	/**
 	 * @brief Prints on System.out if flag is toggled on.
 	 * @param toPrint response to be printed out

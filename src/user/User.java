@@ -5,6 +5,7 @@ import java.util.Base64;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * @brief Class used to denote a user registered on WINSOME. This class is thread-safe.
@@ -176,5 +177,10 @@ public class User
 	public int hashCode()
 	{
 		return username.hashCode();
+	}
+
+	public String toString()
+	{
+		return username + "\r\n" + String.join(", ", tags.stream().map(t -> t.name).collect(Collectors.toSet()));
 	}
 }

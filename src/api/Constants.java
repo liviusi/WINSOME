@@ -14,6 +14,7 @@ public class Constants
 	public static final String LIST_FOLLOWERS_STRING = "list followers";
 	public static final String LIST_FOLLOWING_STRING = "list following";
 	public static final String FOLLOW_USER_STRING = "follow";
+	public static final String UNFOLLOW_USER_STRING = "unfollow";
 
 	private Constants() { }
 }

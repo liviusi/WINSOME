@@ -33,6 +33,9 @@ public interface UserStorage
 	 */
 	public boolean userIsRegistered(final String username);
 
+	public String getUserByName(final String username)
+	throws NoSuchUserException;
+
 	/**
 	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt
 	 * encoded with US ASCII.

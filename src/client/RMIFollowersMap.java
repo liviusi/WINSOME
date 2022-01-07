@@ -28,8 +28,17 @@ public class RMIFollowersMap extends UnicastRemoteObject implements RMIFollowers
 	{
 		Objects.requireNonNull(follower, "Follower user's username cannot be null.");
 		Objects.requireNonNull(followed, "Followed user's username cannot be null.");
-		followers.putIfAbsent(followed, new HashSet<>());
+		followers.putIfAbsent(followed, ConcurrentHashMap.newKeySet());
 		followers.get(followed).add(follower);
+	}
+
+	public void removeFollower(final String follower, final String followed)
+	throws NullPointerException, RemoteException
+	{
+		Objects.requireNonNull(follower, "Follower user's username cannot be null.");
+		Objects.requireNonNull(followed, "Followed user's username cannot be null.");
+		followers.putIfAbsent(followed, ConcurrentHashMap.newKeySet());
+		followers.get(followed).remove(follower);
 	}
 
 	/**

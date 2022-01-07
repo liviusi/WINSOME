@@ -17,7 +17,7 @@ public interface RMICallback extends Remote
 	 * @throws NullPointerException if client is null.
 	 * @throws RemoteException if a remote error occurs.
 	 */
-	void registerForCallback(RMIFollowers client)
+	public void registerForCallback(RMIFollowers client)
 	throws NullPointerException, RemoteException;
 
 	/**
@@ -26,6 +26,6 @@ public interface RMICallback extends Remote
 	 * @throws NullPointerException if client is null.
 	 * @throws RemoteException if a remote error occurs.
 	 */
-	void unregisterForCallback(RMIFollowers client)
+	public void unregisterForCallback(RMIFollowers client)
 	throws NullPointerException, RemoteException;
 }

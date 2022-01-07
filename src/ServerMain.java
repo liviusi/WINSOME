@@ -86,6 +86,8 @@ public class ServerMain
 		private static final String CLIENT_NOT_LOGGED_IN = "Client is not logged in with specified username";
 		private static final String ALREADY_FOLLOWS = " is already following ";
 		private static final String FOLLOW_SUCCESS = " is now following ";
+		private static final String UNFOLLOW_SUCCESS = " has now stopped following ";
+		private static final String NOT_FOLLOWING = " is not following ";
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
 				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients,
@@ -196,7 +198,7 @@ public class ServerMain
 							}
 							if (!exceptionCaught)
 							{
-								try { users.recoverFollowers(command[1]).forEach(s -> callbackService.notifyUser(s, command[1])); }
+								try { users.recoverFollowers(command[1]).forEach(s -> callbackService.notifyNewFollower(s, command[1])); }
 								catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								try
 								{
@@ -422,11 +424,73 @@ public class ServerMain
 								}
 								else
 								{
-									callbackService.notifyUser(command[1], command[2]);
+									String follower = null;
+									try { follower = users.getUserByName(command[1]); }
+									catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									callbackService.notifyNewFollower(follower, command[2]);
 									try
 									{
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write((command[1] + FOLLOW_SUCCESS + command[2]).getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+						}
+						else
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+					}
+				}
+				else if (command[0].equals(CommandCode.UNFOLLOWUSER.getDescription()))
+				{
+					if (command.length != 3)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
+					else
+					{
+						if (loggedInClients.get(client).equals(command[1]))
+						{
+							try { resultBoolean = users.handleUnfollowUser(command[1], command[2]); }
+							catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
+							{
+								exceptionCaught = true;
+								try
+								{
+									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+							if (!exceptionCaught)
+							{
+								if (!resultBoolean)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write((command[1] + NOT_FOLLOWING + command[2]).getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								else
+								{
+									String follower = null;
+									try { follower = users.getUserByName(command[1]); }
+									catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									callbackService.notifyUnfollow(follower, command[2]);
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write((command[1] + UNFOLLOW_SUCCESS + command[2]).getBytes(StandardCharsets.US_ASCII));
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}

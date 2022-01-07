@@ -102,7 +102,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		return followersMap.get(u)
 			.stream()
 			.map(follower ->
-				follower.username + "\r\n" + tagsToString(follower.getTags()))
+				follower.toString())
 			.collect(Collectors.toSet());
 	}
 
@@ -111,6 +111,20 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		if (usersBackedUp.get(username) == null)
 			if (usersToBeBackedUp.get(username) != null) return true;
 		return false;
+	}
+
+	public String getUserByName(final String username)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+
+		User u = null;
+
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
+		return u.toString();
 	}
 
 	public String handleLoginSetup(final String username)
@@ -174,7 +188,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				if (!tUser.username.equals(username))
 				{
-					r.add(tUser.username + "\r\n" + tagsToString(tUser.getTags()));
+					r.add(tUser.toString());
 				}
 			})
 		);
@@ -195,10 +209,8 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		u.getFollowing().forEach(following ->
 			{
-				System.out.println(username + " is following " + following);
-				User tmp = usersBackedUp.get(following);
-				if (tmp == null) tmp = usersToBeBackedUp.get(following);
-				r.add(following + "\r\n" + tagsToString(tmp.getTags()));
+				try { r.add(getUserByName(following)); }
+				catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
 			}
 		);
 
@@ -437,11 +449,5 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			}
 		}
 		return map;
-	}
-
-	/** Converts set of tags to CSV format. */
-	private static String tagsToString(Set<Tag> set)
-	{
-		return String.join(", ", set.stream().map(t -> t.name).collect(Collectors.toSet()));
 	}
 }
