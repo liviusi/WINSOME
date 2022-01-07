@@ -21,6 +21,7 @@ import server.storage.PasswordNotValidException;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
 import user.InvalidTagException;
+import user.InvalidUsernameException;
 import user.TagListTooLongException;
 
 /**
@@ -30,7 +31,10 @@ import user.TagListTooLongException;
 
 public class ClientMain
 {
-	private static String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
+	private static final String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
+	private static final String LOGIN_SUCCESS = " has now logged in.";
+	private static final String NOT_LOGGED_IN = "Client has yet to login";
+	private static final String INVALID_SYNTAX = "Invalid syntax. Type \"help\" to find out which commands are available.";
 
 	public static void main(String[] args)
 	{
@@ -112,7 +116,7 @@ public class ClientMain
 					}
 					catch (NullPointerException e)
 					{
-						System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+						System.err.println(NOT_LOGGED_IN);
 						continue;
 					}
 					if (result == -1)
@@ -123,7 +127,7 @@ public class ClientMain
 					else if (result == 0)
 					{
 						String[] tmp = null;
-						if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " is not following any user.");
+						if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " does not share interests with any user.");
 						else
 						{
 							System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
@@ -142,7 +146,7 @@ public class ClientMain
 					try { resultSet = callbackObject.recoverFollowers(loggedInUsername); }
 					catch (NullPointerException e)
 					{
-						System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+						System.err.println(NOT_LOGGED_IN);
 						continue;
 					}
 
@@ -160,13 +164,49 @@ public class ClientMain
 					}
 					continue;
 				}
+				if (s.equals(Constants.LIST_FOLLOWING_STRING))
+				{
+					resultSet = new HashSet<>();
+					try { result = Command.listFollowing(loggedInUsername, client, true, resultSet); }
+					catch (IOException e)
+					{
+						e.printStackTrace();
+						break loop;
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue;
+					}
+					if (result == -1)
+					{
+						System.err.println(SERVER_DISCONNECT);
+						break loop;
+					}
+					else if (result == 0)
+					{
+						String[] tmp = null;
+						if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start following any user.");
+						else
+						{
+							System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+							System.out.println("< -------------------------------------------------------------------------------");
+							for (String u: resultSet)
+							{
+								tmp = u.split("\r\n");
+								System.out.println(String.format("< %30s %25s %10s", tmp[0], "|", tmp[1]));
+							}
+						}
+						continue;
+					}
+				}
 				String[] command = s.split(" ");
-				if (s.startsWith(Constants.REGISTER_STRING))
+				if (command[0].equals(Constants.REGISTER_STRING))
 				{
 					int len = command.length;
 					if (len < 3)
 					{
-						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
+						System.err.println(INVALID_SYNTAX);
 						continue;
 					}
 					Set<String> tags = new HashSet<>();
@@ -178,7 +218,7 @@ public class ClientMain
 						System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
 						System.exit(1);
 					}
-					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
+					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException | InvalidUsernameException e)
 					{
 						System.err.printf("Given credentials do not meet the requirements:\n%s\n", e.getMessage());
 						continue;
@@ -195,12 +235,12 @@ public class ClientMain
 					}
 					continue;
 				}
-				if (s.startsWith(Constants.LOGIN_STRING))
+				if (command[0].equals(Constants.LOGIN_STRING))
 				{
 					int len = command.length;
 					if (len != 3)
 					{
-						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
+						System.err.println(INVALID_SYNTAX);
 						continue;
 					}
 					try { result = Command.login(command[1], command[2], client, true); }
@@ -218,16 +258,16 @@ public class ClientMain
 					{
 						loggedIn = true;
 						loggedInUsername = command[1];
-						System.out.println("< " + command[1] + Constants.LOGIN_SUCCESS);
+						System.out.println("< " + command[1] + LOGIN_SUCCESS);
 					}
 					continue;
 				}
-				if (s.startsWith(Constants.LOGOUT_STRING))
+				if (command[0].equals(Constants.LOGOUT_STRING))
 				{
 					int len = command.length;
 					if (len != 1)
 					{
-						System.err.println("Invalid syntax. Type \"help\" to find out which commands are available.");
+						System.err.println(INVALID_SYNTAX);
 						continue;
 					}
 					try
@@ -237,7 +277,7 @@ public class ClientMain
 					catch (NullPointerException e)
 					{
 						if (loggedInUsername == null)
-							System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+							System.err.println(NOT_LOGGED_IN);
 						continue;
 					}
 					catch (IOException e)
@@ -252,6 +292,7 @@ public class ClientMain
 					}
 					if (result == 0)
 					{
+						System.out.println("< " + loggedInUsername + " has now logged out.");
 						loggedIn = false;
 						loggedInUsername = null;
 					}
@@ -263,7 +304,7 @@ public class ClientMain
 					catch (NullPointerException e)
 					{
 						if (loggedInUsername == null)
-							System.err.println(Constants.CLIENT_NOT_LOGGED_IN);
+							System.err.println(NOT_LOGGED_IN);
 						continue;
 					}
 					catch (IOException e)
