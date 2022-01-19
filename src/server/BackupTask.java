@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.Objects;
 
 import configuration.ServerConfiguration;
+import server.storage.PostStorage;
 import server.storage.UserStorage;
 
 /**
@@ -23,6 +24,10 @@ public class BackupTask implements Runnable
 	/** Pointer to user storage */
 	private final UserStorage users;
 
+	private final PostStorage posts;
+	private final File postsImmutableFile;
+	private final File postsReactionsFile;
+
 	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_ERROR = " cannot be null.";
 
@@ -33,14 +38,18 @@ public class BackupTask implements Runnable
 	 * @param users cannot be null.
 	 * @throws NullPointerException if any parameter is null.
 	 */
-	public BackupTask(final ServerConfiguration configuration, final UserStorage users)
+	public BackupTask(final ServerConfiguration configuration, final UserStorage users, final PostStorage posts)
 	throws NullPointerException
 	{
 		Objects.requireNonNull(configuration, "Configuration" + NULL_ERROR);
 		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
+		Objects.requireNonNull(posts, "Post storage" + NULL_ERROR);
 		this.usersFile = new File(configuration.userStorageFilename);
 		this.followingFile = new File(configuration.followingStorageFilename);
+		this.postsImmutableFile = new File(configuration.postStorageFilename);
+		this.postsReactionsFile = new File(configuration.postsInteractionsStorageFilename);
 		this.users = users;
+		this.posts = posts;
 
 	}
 
@@ -54,6 +63,8 @@ public class BackupTask implements Runnable
 			{
 				users.backupUsers(usersFile);
 				users.backupFollowing(followingFile);
+				posts.backupPostsImmutableData(postsImmutableFile);
+				posts.backupPostsMutableData(postsReactionsFile);
 			}
 			catch (IOException e)
 			{

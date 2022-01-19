@@ -29,6 +29,7 @@ public abstract class Post
 		 * @return instantiated vote on success, null otherwise.
 		 */
 		public static Vote fromValue(int value)
+		throws InvalidVoteException
 		{
 			Vote v = null;
 			switch (value)
@@ -40,6 +41,9 @@ public abstract class Post
 				case -1:
 					v = Vote.DOWNVOTE;
 					break;
+
+				default:
+					throw new InvalidVoteException("Value specified does not correspond to a valid vote.");
 			}
 			return v;
 		}
@@ -49,9 +53,9 @@ public abstract class Post
 	private static AtomicInteger generatorID = null;
 
 	/** Returns true if and only if the generator has been properly initialized. */
-	public boolean isIDGenerated()
+	public static boolean isIDGenerated()
 	{
-		return generatorID == null;
+		return generatorID != null;
 	}
 
 	/** Instantiates generator. */

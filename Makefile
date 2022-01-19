@@ -50,10 +50,10 @@ TARGETS = run-client run-server build
 .InvalidGeneratorException:
 	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidGeneratorException.java $(OUTPUTDIR)
 
-InvalidPostException:
+.InvalidPostException:
 	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidPostException.java $(OUTPUTDIR)
 
-InvalidVoteException:
+.InvalidVoteException:
 	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidVoteException.java $(OUTPUTDIR)
 
 .Post: .InvalidCommentException .InvalidGeneratorException .InvalidPostException .InvalidVoteException
@@ -89,6 +89,15 @@ InvalidVoteException:
 .UserMap: .UserStorage .UserRMIStorage
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserMap.java $(OUTPUTDIR)
 
+.NoSuchPostException:
+	$(JC) $(CP) $(JFLAGS) src/server/storage/NoSuchPostException.java $(OUTPUTDIR)
+
+.PostStorage: .RewinPost .NoSuchPostException
+	$(JC) $(CP) $(JFLAGS) src/server/storage/PostStorage.java $(OUTPUTDIR)
+
+.PostMap: .PostStorage
+	$(JC) $(CP) $(JFLAGS) src/server/storage/PostMap.java $(OUTPUTDIR)
+
 .BackupTask: .UserMap .ServerConfiguration
 	$(JC) $(CP) $(JFLAGS) src/server/BackupTask.java $(OUTPUTDIR)
 
@@ -104,7 +113,7 @@ InvalidVoteException:
 .RMICallbackService: .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/server/RMICallbackService.java $(OUTPUTDIR)
 
-.RMITask: .User .UserMap .RMICallbackService
+.RMITask: .User .UserMap .RMICallbackService .PostMap
 	$(JC) $(CP) $(JFLAGS) src/server/RMITask.java $(OUTPUTDIR)
 
 .Constants:

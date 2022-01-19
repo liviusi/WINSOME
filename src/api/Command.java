@@ -323,6 +323,99 @@ public class Command
 		}
 	}
 
+	public static int post(final String author, final String title, final String contents, final SocketChannel server, final boolean verbose, StringBuilder dest)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(author, "Author" + NULL_ERROR);
+		Objects.requireNonNull(title, "Title" + NULL_ERROR);
+		Objects.requireNonNull(contents, "Contents" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Destination" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.CREATEPOST.getDescription() + Constants.DELIMITER + author + Constants.DELIMITER + title + Constants.DELIMITER + contents)
+			.getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK)
+		{
+			// dest.append(r.body.replaceAll("^.*?(\\w+)\\W*$", "$1"));
+			dest.append(r.body);
+			return 0;
+		}
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
+	public static int comment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(author, "Author" + NULL_ERROR);
+		Objects.requireNonNull(contents, "Contents" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.COMMENT.getDescription() + Constants.DELIMITER + author + Constants.DELIMITER + postID + Constants.DELIMITER + contents)
+			.getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
+	public static int rate(final String voter, final int postID, final int vote, final SocketChannel server, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(voter, "Author" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = (CommandCode.RATE.getDescription() + Constants.DELIMITER + voter + Constants.DELIMITER + postID + Constants.DELIMITER + vote)
+			.getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
 	/**
 	 * @brief Prints on System.out if flag is toggled on.
 	 * @param toPrint response to be printed out

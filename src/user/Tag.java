@@ -43,4 +43,9 @@ public class Tag
 	{
 		return name.hashCode();
 	}
+
+	public String toString()
+	{
+		return name;
+	}
 }

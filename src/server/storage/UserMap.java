@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
@@ -81,9 +82,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		usersToBeBackedUp.put(username, u);
 		u.getTags().forEach(t -> 
 		{
-			if (interestsMap.get(t) == null)
-				interestsMap.put(t, new HashSet<>());
-			interestsMap.get(t).add(u);
+			Set<User> tmp = new HashSet<>();
+			tmp.add(u);
+			interestsMap.compute(t, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
 		});
 		followersMap.put(u, new HashSet<>());
 	}
@@ -238,9 +239,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		result = followerUser.follow(followedUser);
 		if (result)
 		{
-			if (followersMap.get(followedUser) == null)
-				followersMap.put(followedUser, new HashSet<>());
-			followersMap.get(followedUser).add(followerUser);
+			Set<User> tmp = new HashSet<>();
+			tmp.add(followerUser);
+			followersMap.compute(followedUser, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
 		}
 
 		return result;
@@ -253,7 +254,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
 
 		final String NO_USER_ERROR = "No user could be found for given name: ";
-		User followerUser = null;
+		final User followerUser;
 		User followedUser = null;
 		boolean result = false;
 
@@ -265,10 +266,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
 		result = followerUser.unfollow(followedUser);
 		if (result)
-		{
-			if (followersMap.get(followedUser) != null)
-				followersMap.get(followedUser).remove(followerUser);
-		}
+			followersMap.compute(followedUser, (k, v) -> v.stream().filter(user -> !user.equals(followerUser)).collect(Collectors.toSet()));
 
 		return result;
 	}

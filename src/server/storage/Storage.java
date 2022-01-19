@@ -30,7 +30,8 @@ public abstract class Storage
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		int i = 0;
 
-		fileToBeStoredIn.mkdirs();
+		fileToBeStoredIn.getParentFile().mkdirs();
+
 		try
 		(
 			final FileOutputStream fos = new FileOutputStream(fileToBeStoredIn, false);
@@ -101,7 +102,7 @@ public abstract class Storage
 			fos.close();
 		}
 
-		fileToBeStoredIn.mkdirs();
+		fileToBeStoredIn.getParentFile().mkdirs();
 		fos = new FileOutputStream(fileToBeStoredIn, true);
 		c = fos.getChannel();
 

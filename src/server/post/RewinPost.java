@@ -79,8 +79,12 @@ public class RewinPost extends Post
 			throw new InvalidPostException("Title cannot be longer than 20 characters.");
 		if (contents.length() > 500)
 			throw new InvalidPostException("Contents cannot be longer than 500 characters.");
-		if (title.contains("\r\n")) throw new InvalidPostException("CRLF cannot be inside a post's title");
-		if (contents.contains("\r\n")) throw new InvalidPostException("CRLF cannot be inside a post's contents.");
+		if (author.contains("\r\n"))
+			throw new InvalidPostException("CRLF cannot be inside an author's name.");
+		if (title.contains("\r\n"))
+			throw new InvalidPostException("CRLF cannot be inside a post's title");
+		if (contents.contains("\r\n"))
+			throw new InvalidPostException("CRLF cannot be inside a post's contents.");
 
 		this.id = getNextID();
 		this.author = author;
@@ -177,7 +181,7 @@ public class RewinPost extends Post
 
 	public int hashCode()
 	{
-		return new Integer(id).hashCode();
+		return Integer.valueOf(id).hashCode();
 	}
 
 	public String toString()

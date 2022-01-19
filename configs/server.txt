@@ -10,6 +10,7 @@ CALLBACKSERVICENAME=callback
 USERSTORAGE=./storage/users.json
 FOLLOWINGSTORAGE=./storage/following.json
 POSTSSTORAGE=./storage/posts.json
+POSTSINTERACTIONSSTORAGE=./storage/posts-interactions.json
 SOCKETTIMEOUT=100000
 COREPOOLSIZE=5
 MAXIMUMPOOLSIZE=20

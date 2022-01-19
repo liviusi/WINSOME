@@ -1,8 +1,12 @@
 package server.storage;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -13,6 +17,7 @@ import java.util.stream.Collectors;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
+import com.google.gson.stream.JsonReader;
 
 import server.post.InvalidCommentException;
 import server.post.InvalidGeneratorException;
@@ -42,9 +47,10 @@ public class PostMap extends Storage implements PostStorage
 	private static final String INVALID_ID_ERROR = "There are no posts with id ";
 
 	public PostMap()
-	throws InvalidGeneratorException
 	{
-		Post.generateID();
+		if (!Post.isIDGenerated())
+		try { Post.generateID(); }
+		catch (InvalidGeneratorException concurrentCreation) { throw new ConcurrentModificationException(concurrentCreation); }
 		postsBackedUp = new ConcurrentHashMap<>();
 		postsToBeBackedUp = new ConcurrentHashMap<>();
 		postsByAuthor = new ConcurrentHashMap<>();
@@ -94,7 +100,7 @@ public class PostMap extends Storage implements PostStorage
 			Post p = postsBackedUp.get(id);
 			if (p == null) p = postsToBeBackedUp.get(id);
 			if (p == null) throw new IllegalStateException("Posts' storage is not in a consistent state."); // should never happen
-			r.add(p.getID() + "\r\n" + p.getAuthor() + "\r\n" + p.getTitle() + "\r\n" + p.getContents());
+			r.add(p.toString());
 		});
 
 		return r;
@@ -116,7 +122,7 @@ public class PostMap extends Storage implements PostStorage
 				postsByAuthor.get(followingUsername)
 				.stream()
 				.map(id -> postsBackedUp.get(id))
-				.forEach(post -> r.add(post.toString()))
+				.forEach(post -> r.add(post.getID() + "\r\n" + post.getAuthor() + "\r\n" + post.getTitle()))
 			);
 
 		return r;
@@ -194,6 +200,7 @@ public class PostMap extends Storage implements PostStorage
 
 		if (feedContainsPost(username, users, p))
 			p.addVote(username, vote);
+		else throw new InvalidVoteException("Post does not belong to specified user's feed.");
 	}
 
 	public void handleAddComment(final String author, final UserStorage users, final int id, final String contents)
@@ -213,7 +220,8 @@ public class PostMap extends Storage implements PostStorage
 		{
 			p.addComment(author, contents);
 			return;
-		} else throw new InvalidCommentException("Post does not belong to specified user's feed.");
+		}
+		else throw new InvalidCommentException("Post does not belong to specified user's feed.");
 	}
 
 	public void backupPostsImmutableData(final File backupPostsFile)
@@ -226,8 +234,8 @@ public class PostMap extends Storage implements PostStorage
 			public boolean shouldSkipField(FieldAttributes f)
 			{
 				// skips "comments", "rewonBy", "upvotedBy" and "downvotedBy" fields specified inside RewinPost class.
-				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("author") && !f.getName().equals("title") &&
-					!f.getName().equals("contents");
+				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("author") &&
+					!f.getName().equals("title") && !f.getName().equals("contents");
 			}
 
 			public boolean shouldSkipClass(Class<?> clazz)
@@ -245,9 +253,9 @@ public class PostMap extends Storage implements PostStorage
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
-				// skips "comments", "rewonBy", "upvotedBy" and "downvotedBy" fields specified inside RewinPost class.
-				return f.getDeclaringClass() == RewinPost.class && f.getName().equals("comments") && !f.getName().equals("rewonBy") &&
-					!f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy");
+				// skips everything but "id", "comments", "rewonBy", "upvotedBy" and "downvotedBy" fields specified inside RewinPost class.
+				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("comments")
+						&& !f.getName().equals("rewonBy") && !f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy");
 			}
 
 			public boolean shouldSkipClass(Class<?> clazz)
@@ -255,6 +263,119 @@ public class PostMap extends Storage implements PostStorage
 				return false;
 			}
 		}, backupPostsMetadataFile, postsBackedUp);
+	}
+
+	public static PostMap fromJSON(final File backupPostsFile, final File backupPostsMetadataFile, final UserStorage users)
+	throws FileNotFoundException, IOException, IllegalArchiveException, InvalidGeneratorException
+	{
+		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
+
+		PostMap map = new PostMap();
+		map.flag = true;
+
+		InputStream is = new FileInputStream(backupPostsFile);
+		JsonReader reader = new JsonReader(new InputStreamReader(is));
+
+		reader.setLenient(true);
+		reader.beginArray();
+		while (reader.hasNext())
+		{
+			reader.beginObject();
+			String name = null;
+			String author = null;
+			String title = null;
+			String contents = null;
+			Post p = null;
+			for (int i = 0; i < 3; i++)
+			{
+				name = reader.nextName();
+				switch (name)
+				{
+					case "author":
+						author = reader.nextString();
+						break;
+
+					case "title":
+						title = reader.nextString();
+						break;
+
+					case "contents":
+						contents = reader.nextString();
+						break;
+
+					default:
+						reader.skipValue();
+						break;
+				}
+			}
+			reader.endObject();
+			try { p = new RewinPost(author, title, contents); }
+			catch (InvalidPostException | InvalidGeneratorException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			map.postsBackedUp.put(p.getID(), p);
+			if (map.postsByAuthor.get(author) == null)
+				map.postsByAuthor.put(author, new HashSet<>());
+			map.postsByAuthor.get(author).add(p.getID());
+		}
+		reader.endArray();
+		reader.close();
+		is.close();
+
+		is = new FileInputStream(backupPostsMetadataFile);
+		reader = new JsonReader(new InputStreamReader(is));
+
+
+		reader.setLenient(true);
+		reader.beginArray();
+		while (reader.hasNext())
+		{
+			reader.beginObject();
+			String name = null;
+			int id = -1;
+			String author = null;
+			String contents = null;
+			for (int i = 0; i < 5; i++)
+			{
+				name = reader.nextName();
+				switch (name)
+				{
+					case "id":
+						id = reader.nextInt();
+						break;
+
+					case "comments":
+						reader.beginArray();
+						while (reader.hasNext())
+						{
+							reader.beginObject();
+							for (int j = 0; j < 2; j++)
+							{
+								name = reader.nextName();
+								if (name.equals("author"))
+									author = reader.nextString();
+								else if (name.equals("contents"))
+									contents = reader.nextString();
+							}
+							reader.endObject();
+						}
+						reader.endArray();
+						break;
+					
+					default:
+						reader.skipValue();
+						break;
+				}
+			}
+			reader.endObject();
+
+			try { map.handleAddComment(author, users, id, contents); }
+			catch (InvalidCommentException | NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			catch (NullPointerException noComments) { }
+		}
+		reader.endArray();
+		reader.close();
+		is.close();
+
+		return map;
 	}
 
 	private boolean feedContainsPost(final String username, final UserStorage users, final Post p)

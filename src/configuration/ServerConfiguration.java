@@ -21,6 +21,7 @@ public class ServerConfiguration extends Configuration
 	private static final String USERSTORAGE_STRING = "USERSTORAGE";
 	private static final String FOLLOWINGSTORAGE_STRING = "FOLLOWINGSTORAGE";
 	private static final String POSTSSTORAGE_STRING = "POSTSSTORAGE";
+	private static final String POSTSINTERACTIONSSTORAGE = "POSTSINTERACTIONSSTORAGE";
 
 	/** Socket timeout value. */
 	public final int socketTimeout;
@@ -38,6 +39,7 @@ public class ServerConfiguration extends Configuration
 	public final String followingStorageFilename;
 	/** Filename of the file posts are to be stored in. */
 	public final String postStorageFilename;
+	public final String postsInteractionsStorageFilename;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -58,7 +60,8 @@ public class ServerConfiguration extends Configuration
 		if (properties.containsKey(SOCKETTIMEOUT_STRING) && properties.containsKey(COREPOOLSIZE_STRING) &&
 			properties.containsKey(MAXIMUMPOOLSIZE_STRING) && properties.containsKey(KEEPALIVETIME_STRING) &&
 			properties.containsKey(THREADPOOLTIMEOUT_STRING) && properties.containsKey(USERSTORAGE_STRING) &&
-			properties.containsKey(FOLLOWINGSTORAGE_STRING) && properties.containsKey(POSTSSTORAGE_STRING))
+			properties.containsKey(FOLLOWINGSTORAGE_STRING) && properties.containsKey(POSTSSTORAGE_STRING) &&
+			properties.containsKey(POSTSINTERACTIONSSTORAGE))
 		{
 			// validating socket timeout:
 			try
@@ -99,6 +102,7 @@ public class ServerConfiguration extends Configuration
 			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);
 			followingStorageFilename = properties.getProperty(FOLLOWINGSTORAGE_STRING);
 			postStorageFilename = properties.getProperty(POSTSSTORAGE_STRING);
+			postsInteractionsStorageFilename = properties.getProperty(POSTSINTERACTIONSSTORAGE);
 			return;
 		}
 		else

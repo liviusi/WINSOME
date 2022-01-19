@@ -36,8 +36,16 @@ import configuration.ServerConfiguration;
 import server.BackupTask;
 import server.RMICallbackService;
 import server.RMITask;
+import server.post.InvalidCommentException;
+import server.post.InvalidGeneratorException;
+import server.post.InvalidPostException;
+import server.post.InvalidVoteException;
+import server.post.Post.Vote;
 import server.storage.IllegalArchiveException;
+import server.storage.NoSuchPostException;
 import server.storage.NoSuchUserException;
+import server.storage.PostMap;
+import server.storage.PostStorage;
 import server.storage.UserMap;
 import server.storage.UserStorage;
 import user.InvalidLoginException;
@@ -77,6 +85,7 @@ public class ServerMain
 		private Selector selector = null;
 		private SelectionKey key = null;
 		private UserStorage users = null;
+		private PostStorage posts = null;
 		private Map<SocketChannel, String> loggedInClients = null;
 		private RMICallbackService callbackService = null;
 
@@ -90,13 +99,14 @@ public class ServerMain
 		private static final String NOT_FOLLOWING = " is not following ";
 
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
-				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients,
-				RMICallbackService callbackService)
+				final SelectionKey key, final UserStorage users, final PostStorage posts, Map<SocketChannel, String> loggedInClients,
+				final RMICallbackService callbackService)
 		{
 			this.toBeRegistered = toBeRegistered;
 			this.selector = selector;
 			this.key = key;
 			this.users = users;
+			this.posts = posts;
 			this.loggedInClients = loggedInClients;
 			this.callbackService = callbackService;
 		}
@@ -107,6 +117,7 @@ public class ServerMain
 			SocketChannel client = (SocketChannel) key.channel();
 			int nRead = 0;
 			int size = BUFFERSIZE;
+			int postID = -1;
 			ByteArrayOutputStream answerConstructor = new ByteArrayOutputStream();
 			StringBuilder sb = new StringBuilder();
 			String username = null;
@@ -156,7 +167,7 @@ public class ServerMain
 					return;
 				}
 				System.out.printf("> client %s: \"%s\"\n", clientName, message);
-				final String[] command = message.split(":");
+				final String[] command = message.split(Constants.DELIMITER);
 				// "Login:<username>:<hashPassword>"
 				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
 				{
@@ -507,6 +518,136 @@ public class ServerMain
 						}
 					}
 				}
+				else if (command[0].equals(CommandCode.CREATEPOST.getDescription()))
+				{
+					if (command.length != 4)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
+					else
+					{
+						if (loggedInClients.get(client).equals(command[1]))
+						{
+							try { postID = posts.handleCreatePost(command[1], command[2], command[3]); }
+							catch (InvalidPostException e)
+							{
+								exceptionCaught = true;
+								try
+								{
+									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+							catch (InvalidGeneratorException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							if (!exceptionCaught)
+							{
+								try
+								{
+									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write((command[1] + " has now created a new post: " + postID).getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+						}
+						else
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+					}
+				}
+				else if (command[0].equals(CommandCode.COMMENT.getDescription()))
+				{
+					if (command.length != 4)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
+					else
+					{
+						if (loggedInClients.get(client).equals(command[1]))
+						{
+							try { posts.handleAddComment(command[1], users, Integer.parseInt(command[2]), command[3]); }
+							catch (InvalidCommentException | NoSuchPostException | NumberFormatException e)
+							{
+								exceptionCaught = true;
+								try
+								{
+									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+							if (!exceptionCaught)
+							{
+								try
+								{
+									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write((command[1] + " has now added a new comment.").getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+						}
+						else
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+					}
+				}
+				else if (command[0].equals(CommandCode.RATE.getDescription()))
+				{
+					if (command.length != 4)
+					{
+						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+					}
+					else
+					{
+						if (loggedInClients.get(client).equals(command[1]))
+						{
+							try { posts.handleRate(command[1], users, Integer.parseInt(command[2]), Vote.fromValue(Integer.parseInt(command[3]))); }
+							catch (NoSuchPostException | NumberFormatException | InvalidVoteException e)
+							{
+								exceptionCaught = true;
+								try
+								{
+									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+							if (!exceptionCaught)
+							{
+								try
+								{
+									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+									answerConstructor.write((command[1] + " has now rated a post.").getBytes(StandardCharsets.US_ASCII));
+								}
+								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							}
+						}
+						else
+						{
+							try
+							{
+								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+						}
+					}
+				}
 
 				putByteArray(buffer, size, answerConstructor.toByteArray());
 				buffer.flip();
@@ -667,6 +808,12 @@ public class ServerMain
 			e.printStackTrace();
 			System.exit(1);
 		}
+		PostStorage posts = null;
+		try { posts = PostMap.fromJSON(new File("./storage/posts.json"), new File("./storage/posts-interactions.json"), users); }
+		catch (IOException | IllegalArchiveException | InvalidGeneratorException e)
+		{
+			posts = new PostMap();
+		}
 		RMICallbackService callbackService = null;
 		try  { callbackService = new RMICallbackService(); }
 		catch (RemoteException e)
@@ -676,7 +823,7 @@ public class ServerMain
 		}
 		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users, callbackService));
 		rmi.start();
-		Thread backup = new Thread(new BackupTask(configuration, users));
+		Thread backup = new Thread(new BackupTask(configuration, users, posts));
 		backup.start();
 
 		// setting up multiplexing:
@@ -792,7 +939,7 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, loggedInClients, callbackService)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, posts, loggedInClients, callbackService)));
 					}
 					if (k.isWritable())
 					{

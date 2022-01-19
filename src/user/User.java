@@ -3,9 +3,9 @@ package user;
 import java.nio.channels.SocketChannel;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * @brief Class used to denote a user registered on WINSOME. This class is thread-safe.
@@ -181,6 +181,18 @@ public class User
 
 	public String toString()
 	{
-		return username + "\r\n" + String.join(", ", tags.stream().map(t -> t.name).collect(Collectors.toSet()));
+		return String.format("{ \"username\": \"%s\",\n\"tags\":\n[%s]", username, setToString(tags)) + "}";
+	}
+
+	private <T> String setToString(Set<T> set)
+	{
+		Iterator<T> it = set.iterator();
+		StringBuilder sb = new StringBuilder();
+		while (it.hasNext())
+		{
+			sb.append(it.next());
+			if (it.hasNext()) sb.append(",");
+		}
+		return sb.toString();
 	}
 }

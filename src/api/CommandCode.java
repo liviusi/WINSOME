@@ -13,7 +13,10 @@ public enum CommandCode
 	LISTUSERS("List users"),
 	LISTFOLLOWING("List following"),
 	FOLLOWUSER("Follow"),
-	UNFOLLOWUSER("Unfollow");
+	UNFOLLOWUSER("Unfollow"),
+	CREATEPOST("Post"),
+	COMMENT("Comment"),
+	RATE("Rate");
 
 	/** Used to represent the command as a string. */
 	private String description;
