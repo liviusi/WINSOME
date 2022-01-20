@@ -23,6 +23,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
 import api.CommandCode;
 import api.Communication;
 import api.Constants;
@@ -92,7 +96,6 @@ public class ServerMain
 		private static final String LOGIN_SUCCESS = " has now logged in";
 		private static final String CLIENT_ALREADY_LOGGED_IN = "Client has already logged in";
 		private static final String LOGOUT_SUCCESS = " has now logged out";
-		private static final String CLIENT_NOT_LOGGED_IN = "Client is not logged in with specified username";
 		private static final String ALREADY_FOLLOWS = " is already following ";
 		private static final String FOLLOW_SUCCESS = " is now following ";
 		private static final String UNFOLLOW_SUCCESS = " has now stopped following ";
@@ -117,17 +120,15 @@ public class ServerMain
 			SocketChannel client = (SocketChannel) key.channel();
 			int nRead = 0;
 			int size = BUFFERSIZE;
-			int postID = -1;
+			JsonObject jsonMessage = null;
+			JsonElement elem = null;
 			ByteArrayOutputStream answerConstructor = new ByteArrayOutputStream();
 			StringBuilder sb = new StringBuilder();
-			String username = null;
+			final String username;
 			String message = null;
 			String clientName = null;
 			boolean exceptionCaught = false;
-			boolean resultBoolean = false;
-			Set<String> resultSet = null;
-			String salt = null;
-
+	
 			buffer.flip();
 			buffer.clear();
 			try { nRead = Communication.receiveMessage(client, buffer, sb); }
@@ -167,17 +168,12 @@ public class ServerMain
 					return;
 				}
 				System.out.printf("> client %s: \"%s\"\n", clientName, message);
-				final String[] command = message.split(Constants.DELIMITER);
-				// "Login:<username>:<hashPassword>"
-				if (command[0].equals(CommandCode.LOGINATTEMPT.getDescription()))
+				jsonMessage = new Gson().fromJson(message, JsonObject.class);
+				elem = jsonMessage.get("command");
+				if (elem == null) syntaxErrorHandler(answerConstructor);
+				else
 				{
-					// validate command syntax:
-					if (command.length != 3)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else 
+					if (elem.getAsString().equals(CommandCode.LOGINATTEMPT.description))
 					{
 						if (loggedInClients.containsKey(client))
 						{
@@ -190,48 +186,50 @@ public class ServerMain
 						}
 						else
 						{
-							try { users.handleLogin(command[1], client, command[2]); }
-							catch (InvalidLoginException | WrongCredentialsException | NoSuchUserException e)
+							elem = jsonMessage.get("username");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
 							{
-								exceptionCaught = true;
-								try
+								username = elem.getAsString();
+								elem = jsonMessage.get("hashedpassword");
+								if (elem == null) syntaxErrorHandler(answerConstructor);
+								else
 								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									String hashedPassword = elem.getAsString();
+									try { users.handleLogin(username, client, hashedPassword); }
+									catch (InvalidLoginException | WrongCredentialsException | NoSuchUserException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									catch (NullPointerException e)
+									{
+										exceptionCaught = true;
+										try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										try { users.recoverFollowers(username).forEach(s -> callbackService.notifyNewFollower(s, username)); }
+										catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										try
+										{
+											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write((username + LOGIN_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										loggedInClients.put(client, username);
+									}
 								}
-									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							catch (NullPointerException e)
-							{
-								exceptionCaught = true;
-								try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try { users.recoverFollowers(command[1]).forEach(s -> callbackService.notifyNewFollower(s, command[1])); }
-								catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + LOGIN_SUCCESS).getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-								loggedInClients.put(client, command[1]);
 							}
 						}
 					}
-				}
-				// "Login setup:<username>"
-				else if (command[0].equals(CommandCode.LOGINSETUP.getDescription()))
-				{
-					// validate command syntax:
-					if (command.length != 2)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
+					else if (elem.getAsString().equals(CommandCode.LOGINSETUP.description))
 					{
 						if (loggedInClients.containsKey(client))
 						{
@@ -244,221 +242,193 @@ public class ServerMain
 						}
 						else
 						{
-							try { salt = users.handleLoginSetup(command[1]); }
-							catch (NoSuchUserException e)
+							elem = jsonMessage.get("username");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
 							{
-								exceptionCaught = true;
-								try
+								username = elem.getAsString();
+								String salt = null;
+								try { salt = users.handleLoginSetup(username); }
+								catch (NoSuchUserException e)
 								{
-									answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(salt.getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-					}
-				}
-				// "Logout:<username>"
-				else if (command[0].equals(CommandCode.LOGOUT.getDescription()))
-				{
-					if (command.length != 2)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { users.handleLogout(command[1], client); }
-							catch (InvalidLogoutException | NoSuchUserException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + LOGOUT_SUCCESS).getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-								loggedInClients.remove(client);
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write(CLIENT_NOT_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
-				// List users:<username>
-				else if (command[0].equals(CommandCode.LISTUSERS.getDescription()))
-				{
-					if (command.length != 2)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { resultSet = users.handleListUsers(command[1]); }
-							catch (NoSuchUserException | NullPointerException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									size = SetToByteArray(resultSet, answerConstructor);
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
-				// List following:<username>
-				else if (command[0].equals(CommandCode.LISTFOLLOWING.getDescription()))
-				{
-					if (command.length != 2)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { resultSet = users.handleListFollowing(command[1]); }
-							catch (NoSuchUserException | NullPointerException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									size = SetToByteArray(resultSet, answerConstructor);
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
-				else if (command[0].equals(CommandCode.FOLLOWUSER.getDescription()))
-				{
-					if (command.length != 3)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { resultBoolean = users.handleFollowUser(command[1], command[2]); }
-							catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								if (!resultBoolean)
-								{
+									exceptionCaught = true;
 									try
 									{
-										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-										answerConstructor.write((command[1] + ALREADY_FOLLOWS + command[2]).getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
-								else
+								if (!exceptionCaught)
 								{
-									String follower = null;
-									try { follower = users.getUserByName(command[1]); }
-									catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-									callbackService.notifyNewFollower(follower, command[2]);
 									try
 									{
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-										answerConstructor.write((command[1] + FOLLOW_SUCCESS + command[2]).getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(salt.getBytes(StandardCharsets.US_ASCII));
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
 						}
+					}
+					else if (elem.getAsString().equals(CommandCode.LOGOUT.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
 						else
 						{
-							try
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
 							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
+								try { users.handleLogout(username, client); }
+								catch (InvalidLogoutException | NoSuchUserException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write((username + LOGOUT_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									loggedInClients.remove(client);
+								}
 							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+							else invalidUsernameHandler(answerConstructor, username);
 						}
 					}
-				}
+					else if (elem.getAsString().equals(CommandCode.LISTUSERS.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								Set<String> result = null;
+								try { result = users.handleListUsers(username); }
+								catch (NoSuchUserException | NullPointerException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										size = SetToByteArray(result, answerConstructor);
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.LISTFOLLOWING.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								Set<String> result = null;
+								try { result = users.handleListFollowing(username); }
+								catch (NoSuchUserException | NullPointerException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										size = SetToByteArray(result, answerConstructor);
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.FOLLOWUSER.description))
+					{
+						elem = jsonMessage.get("follower");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("followed");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								final String followed = elem.getAsString();
+								if (loggedInClients.get(client).equals(username))
+								{
+									boolean result = false;
+									try { result = users.handleFollowUser(username, followed); }
+									catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										if (!result)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + ALREADY_FOLLOWS + followed).getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										else
+										{
+											callbackService.notifyNewFollower(username, followed);
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + FOLLOW_SUCCESS + followed).getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+								}
+								else invalidUsernameHandler(answerConstructor, username);
+							}
+						}
+					}
+
+					else syntaxErrorHandler(answerConstructor);
+				/**
 				else if (command[0].equals(CommandCode.UNFOLLOWUSER.getDescription()))
 				{
 					if (command.length != 3)
@@ -647,7 +617,7 @@ public class ServerMain
 							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 						}
 					}
-				}
+				*/
 
 				putByteArray(buffer, size, answerConstructor.toByteArray());
 				buffer.flip();
@@ -657,6 +627,7 @@ public class ServerMain
 				return;
 			}
 		}
+	}
 
 		private static <T> int SetToByteArray(Set<T> set, ByteArrayOutputStream dst)
 		throws IOException
@@ -713,6 +684,25 @@ public class ServerMain
 			return newSize;
 		}
 
+		private static void syntaxErrorHandler(ByteArrayOutputStream baos)
+		{
+			try
+			{
+				baos.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
+				baos.write("Syntax error.".getBytes(StandardCharsets.US_ASCII));
+			}
+			catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+		}
+
+		private static void invalidUsernameHandler(ByteArrayOutputStream baos, final String username)
+		{
+			try
+			{
+				baos.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+				baos.write(String.format("User %s is not logged in with this client", username).getBytes(StandardCharsets.US_ASCII));
+			}
+			catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+		}
 	}
 
 	private static class MessageDispatcher implements Runnable
@@ -927,7 +917,7 @@ public class ServerMain
 							client.configureBlocking(false);
 
 							client.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(BUFFERSIZE));
-							System.out.println("New client accepted: " + client.getLocalAddress());
+							System.out.println("New client accepted: " + client.hashCode());
 						}
 						catch (ClosedChannelException clientDisconnected) { } // nothing to do
 						catch (IOException e)

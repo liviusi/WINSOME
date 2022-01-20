@@ -32,6 +32,14 @@ public class Command
 	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
 	/** Used as an error message whenever an input parameter is null. */
 	private static final String NULL_ERROR = " cannot be null.";
+	private static final String COMMAND = "command";
+	private static final String USERNAME = "username";
+	private static final String HASHEDPASSWORD = "hashedpassword";
+	private static final String FOLLOWER = "follower";
+	private static final String FOLLOWED = "followed";
+	private static final String AUTHOR = "author";
+	private static final String TITLE = "title";
+	private static final String CONTENTS = "contents";
 
 	/**
 	 * @brief Signs up a user to WINSOME.
@@ -87,7 +95,8 @@ public class Command
 		String hashedPassword = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGINSETUP.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\"}", COMMAND, CommandCode.LOGINSETUP.description, USERNAME, username)
+				.getBytes(StandardCharsets.US_ASCII);
 		// Login setup:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -103,7 +112,8 @@ public class Command
 		saltDecoded = r.body;
 		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGINATTEMPT.getDescription() + Constants.DELIMITER + username + Constants.DELIMITER + hashedPassword).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LOGINATTEMPT.description, USERNAME,
+				username, HASHEDPASSWORD, hashedPassword).getBytes(StandardCharsets.US_ASCII);
 		// Login:<username>:<hash(password, salt)>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -140,7 +150,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LOGOUT.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LOGOUT.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		// Logout:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -179,7 +189,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LISTUSERS.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LISTUSERS.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -229,7 +239,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.LISTFOLLOWING.getDescription() + Constants.DELIMITER + username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LISTFOLLOWING.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -280,7 +290,8 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.FOLLOWUSER.getDescription() + Constants.DELIMITER + follower + Constants.DELIMITER + followed).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.FOLLOWUSER.description, FOLLOWER,
+				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -308,7 +319,8 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.UNFOLLOWUSER.getDescription() + Constants.DELIMITER + follower + Constants.DELIMITER + followed).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.UNFOLLOWUSER.description, FOLLOWER,
+				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -338,8 +350,8 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.CREATEPOST.getDescription() + Constants.DELIMITER + author + Constants.DELIMITER + title + Constants.DELIMITER + contents)
-			.getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.CREATEPOST.description,
+				AUTHOR, author, TITLE, title, CONTENTS, contents).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -372,7 +384,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.COMMENT.getDescription() + Constants.DELIMITER + author + Constants.DELIMITER + postID + Constants.DELIMITER + contents)
+		bytes = (CommandCode.COMMENT.description + Constants.DELIMITER + author + Constants.DELIMITER + postID + Constants.DELIMITER + contents)
 			.getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -400,7 +412,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.RATE.getDescription() + Constants.DELIMITER + voter + Constants.DELIMITER + postID + Constants.DELIMITER + vote)
+		bytes = (CommandCode.RATE.description + Constants.DELIMITER + voter + Constants.DELIMITER + postID + Constants.DELIMITER + vote)
 			.getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();

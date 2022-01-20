@@ -19,16 +19,11 @@ public enum CommandCode
 	RATE("Rate");
 
 	/** Used to represent the command as a string. */
-	private String description;
+	public final String description;
 
 	/**
 	 * @brief Private constructor used to initialize a CommandCode.
 	 * @param description Used to describe the code.
 	 */
 	private CommandCode(String description) { this.description = description; }
-
-	/**
-	 * @return description CommandCode's representation as a string.
-	 */
-	public String getDescription() { return this.description; }
 }
