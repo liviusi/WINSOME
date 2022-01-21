@@ -42,12 +42,11 @@ public class User
 	 * @throws TagListTooLongException if the set of tags has more than 5 elements.
 	 */
 	public User(final String username, final String hashPassword, Set<String> tags, final byte[] saltUsed)
-	throws NullPointerException, InvalidTagException, TagListTooLongException, InvalidUsernameException
+	throws NullPointerException, InvalidTagException, TagListTooLongException
 	{
 		Objects.requireNonNull(tags, "Tags" + NULL_ERROR);
 		Objects.requireNonNull(saltUsed, "Salt" + NULL_ERROR);
 		this.username = Objects.requireNonNull(username, "Username" + NULL_ERROR);
-		if (this.username.contains("\r\n")) throw new InvalidUsernameException("User's username cannot contain CRLF.");
 		this.hashPassword = Objects.requireNonNull(hashPassword, "Hashed password" + NULL_ERROR);
 		this.tags = new HashSet<>();
 		for (String t : tags)

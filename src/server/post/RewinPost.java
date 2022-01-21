@@ -79,12 +79,6 @@ public class RewinPost extends Post
 			throw new InvalidPostException("Title cannot be longer than 20 characters.");
 		if (contents.length() > 500)
 			throw new InvalidPostException("Contents cannot be longer than 500 characters.");
-		if (author.contains("\r\n"))
-			throw new InvalidPostException("CRLF cannot be inside an author's name.");
-		if (title.contains("\r\n"))
-			throw new InvalidPostException("CRLF cannot be inside a post's title");
-		if (contents.contains("\r\n"))
-			throw new InvalidPostException("CRLF cannot be inside a post's contents.");
 
 		this.id = getNextID();
 		this.author = author;
@@ -152,8 +146,6 @@ public class RewinPost extends Post
 		if (Objects.requireNonNull(contents, "Contents" + NULL_ERROR).isEmpty())
 			throw new InvalidCommentException("Comment contents" + EMPTY_ERROR);
 
-		if (contents.contains("\r\n")) throw new InvalidCommentException("Comment contents cannot contain CRLF.");
-		
 		comments.add(new Comment(username, contents));
 	}
 
@@ -186,6 +178,6 @@ public class RewinPost extends Post
 
 	public String toString()
 	{
-		return id + "\r\n" + author + "\r\n" + title + "\r\n" + contents;
+		return String.format("{ \"%s\": \"%d\",\n \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%s\"}", "id", id, "author", author, "title", title, "contents", contents);
 	}
 }
