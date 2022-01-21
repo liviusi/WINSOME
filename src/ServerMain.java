@@ -566,6 +566,40 @@ public class ServerMain
 							}
 						}
 					}
+					else if (elem.getAsString().equals(CommandCode.SHOWFEED.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								Set<String> result = null;
+								try { result = posts.handleShowFeed(username, users); }
+								catch (NoSuchUserException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										size = SetToByteArray(result, answerConstructor);
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
 
 					else syntaxErrorHandler(answerConstructor);
 				/**

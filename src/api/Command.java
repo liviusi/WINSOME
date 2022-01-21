@@ -347,7 +347,7 @@ public class Command
 		}
 	}
 
-	public static int blog(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
+	public static int viewBlog(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(author, "Username" + NULL_ERROR);
@@ -379,7 +379,7 @@ public class Command
 		return 0;
 	}
 
-	public static int post(final String author, final String title, final String contents, final SocketChannel server, final boolean verbose, StringBuilder dest)
+	public static int createPost(final String author, final String title, final String contents, final SocketChannel server, final boolean verbose, StringBuilder dest)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(author, "Author" + NULL_ERROR);
@@ -412,6 +412,38 @@ public class Command
 			printIf(r, verbose);
 			return 1;
 		}
+	}
+
+	public static int showFeed(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(author, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> r = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.SHOWFEED.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
+		r = Response.parseAnswer(baos.toByteArray());
+		if (r == null)
+		{
+			Response<String> retry = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (retry == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(retry, verbose);
+				return 1;
+			}
+		}
+		for (String s: r.body) dest.add(s);
+		return 0;
 	}
 
 	/**

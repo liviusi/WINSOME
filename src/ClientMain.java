@@ -96,6 +96,7 @@ public class ClientMain
 	private static final String UNFOLLOW_USER_STRING = "unfollow";
 	private static final String BLOG_STRING = "blog";
 	private static final String CREATE_POST_STRING = "post";
+	private static final String SHOW_FEED_STRING = "show feed";
 	private static final String COMMENT_STRING = "comment";
 	private static final String RATE_STRING = "rate";
 
@@ -308,7 +309,7 @@ public class ClientMain
 					continue;
 				}
 				resultSet = new HashSet<>();
-				try { result = Command.blog(loggedInUsername, client, resultSet, true); }
+				try { result = Command.viewBlog(loggedInUsername, client, resultSet, true); }
 				catch (IOException e)
 				{
 					e.printStackTrace();
@@ -322,6 +323,41 @@ public class ClientMain
 				else
 				{
 					if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start posting.");
+					else
+					{
+						System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
+						System.out.println("< --------------------------------------------------------------------------");
+						for (String p: resultSet)
+						{
+							Post tmp = Post.fromJSON(p);
+							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+						}
+					}
+					continue;
+				}
+			}
+			if (s.equals(SHOW_FEED_STRING))
+			{
+				if (loggedInUsername == null)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				resultSet = new HashSet<>();
+				try { result = Command.showFeed(loggedInUsername, client, resultSet, true); }
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				else
+				{
+					if (resultSet.isEmpty()) System.out.println("< The users " + loggedInUsername + " is following have yet to start posting.");
 					else
 					{
 						System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
@@ -476,7 +512,7 @@ public class ClientMain
 					System.err.println(INVALID_SYNTAX);
 					continue;
 				}
-				try { result = Command.post(loggedInUsername, command[1], command[2], client, true, sb); }
+				try { result = Command.createPost(loggedInUsername, command[1], command[2], client, true, sb); }
 				catch (NullPointerException e)
 				{
 					System.err.println(NOT_LOGGED_IN);
