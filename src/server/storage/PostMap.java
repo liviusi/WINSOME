@@ -11,12 +11,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.stream.JsonReader;
 
 import server.post.InvalidCommentException;
@@ -76,12 +80,12 @@ public class PostMap extends Storage implements PostStorage
 		p = new RewinPost(Objects.requireNonNull(author, "Author" + NULL_PARAM_ERROR),
 				Objects.requireNonNull(title, "Title" + NULL_PARAM_ERROR),
 				Objects.requireNonNull(contents, "Contents" + NULL_PARAM_ERROR));
+		Set<Integer> tmp = new HashSet<>();
 
 		postID = p.getID();
 		postsToBeBackedUp.put(postID, p);
-		if (postsByAuthor.get(author) == null)
-			postsByAuthor.put(author, new HashSet<>());
-		postsByAuthor.get(author).add(postID);
+		tmp.add(postID);
+		postsByAuthor.compute(author, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
 		return postID;
 	}
 
@@ -116,13 +120,10 @@ public class PostMap extends Storage implements PostStorage
 
 		users.handleListFollowing(username)
 			.stream()
-			.map(s -> s.split("\r\n")[0]). // discard tags
-			collect(Collectors.toSet())
+			.map(s -> new Gson().fromJson(s, JsonObject.class).get("username").getAsString())
 			.forEach(followingUsername ->
-				postsByAuthor.get(followingUsername)
-				.stream()
-				.map(id -> postsBackedUp.get(id))
-				.forEach(post -> r.add(post.getID() + "\r\n" + post.getAuthor() + "\r\n" + post.getTitle()))
+				Optional.ofNullable(postsByAuthor.get(followingUsername)).orElseGet(HashSet<Integer>::new)
+				.forEach(id -> r.add(postsBackedUp.get(id).toString()))
 			);
 
 		return r;
@@ -140,7 +141,7 @@ public class PostMap extends Storage implements PostStorage
 		return p.getTitle() + "\r\n" + p.getContents() + "\r\n" + p.getUpvotesNo() + "\r\n" + p.getDownvotesNo() + "\r\n" + String.join("\r\n", p.getComments());
 	}
 
-	public boolean handleDeletePost(final String username, final int id)
+	public synchronized boolean handleDeletePost(final String username, final int id)
 	throws NoSuchPostException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
