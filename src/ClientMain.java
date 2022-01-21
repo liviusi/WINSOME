@@ -133,8 +133,8 @@ public class ClientMain
 	private static final String SHOW_POST_STRING = "show post";
 	private static final String DELETE_POST_STRING = "delete";
 	private static final String REWIN_STRING = "rewin";
+	private static final String RATE_STRING = "rate";
 	// private static final String COMMENT_STRING = "comment";
-	// private static final String RATE_STRING = "rate";
 
 	private static final Gson gson = new Gson();
 
@@ -669,6 +669,35 @@ public class ClientMain
 				if (result == 0) System.out.println("< Post has now been rewon.");
 				continue;
 			}
+			if (command[0].equals(RATE_STRING))
+			{
+				if (command.length != 3)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				try { result = Command.ratePost(loggedInUsername, Integer.parseInt(command[1]), Integer.parseInt(command[2]), client, true); }
+				catch (NullPointerException e)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				if (result == 0)
+				{
+					System.out.println("< New vote added.");
+					continue;
+				}
+			}
 			/**
 			if (command[0].equals(COMMENT_STRING))
 			{
@@ -696,35 +725,6 @@ public class ClientMain
 				if (result == 0)
 				{
 					System.out.println("< New comment added.");
-					continue;
-				}
-			}
-			if (command[0].equals(RATE_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.rate(loggedInUsername, Integer.parseInt(command[1]), Integer.parseInt(command[2]), client, true); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					System.out.println("< New vote added.");
 					continue;
 				}
 			}

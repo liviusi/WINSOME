@@ -360,6 +360,8 @@ public class PostMap extends Storage implements PostStorage
 			String author = null;
 			String contents = null;
 			List<String> rewinners = new ArrayList<>();
+			List<String> upvoters = new ArrayList<>();
+			List<String> downvoters = new ArrayList<>();
 			for (int i = 0; i < 5; i++)
 			{
 				name = reader.nextName();
@@ -394,6 +396,20 @@ public class PostMap extends Storage implements PostStorage
 						reader.endArray();
 						break;
 					
+					case "upvotedBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							upvoters.add(reader.nextString());
+						reader.endArray();
+						break;
+					
+					case "downvotedBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							downvoters.add(reader.nextString());
+						reader.endArray();
+						break;
+					
 					default:
 						reader.skipValue();
 						break;
@@ -402,12 +418,22 @@ public class PostMap extends Storage implements PostStorage
 			reader.endObject();
 
 			try { map.handleAddComment(author, users, id, contents); }
-			catch (InvalidCommentException | NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			catch (InvalidCommentException | NoSuchPostException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			catch (NullPointerException noComments) { }
 			for (String r : rewinners)
 			{
 				try { map.handleRewin(r, users, id); }
 				catch (NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			}
+			for (String r : upvoters)
+			{
+				try { map.handleRate(r, users, id, Vote.UPVOTE); }
+				catch (NoSuchPostException | InvalidVoteException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			}
+			for (String r : downvoters)
+			{
+				try { map.handleRate(r, users, id, Vote.DOWNVOTE); }
+				catch (NoSuchPostException | InvalidVoteException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			}
 		}
 		reader.endArray();

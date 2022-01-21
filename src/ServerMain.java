@@ -39,8 +39,11 @@ import configuration.ServerConfiguration;
 import server.BackupTask;
 import server.RMICallbackService;
 import server.RMITask;
+import server.post.InvalidCommentException;
 import server.post.InvalidGeneratorException;
 import server.post.InvalidPostException;
+import server.post.InvalidVoteException;
+import server.post.Post.Vote;
 import server.storage.IllegalArchiveException;
 import server.storage.NoSuchPostException;
 import server.storage.NoSuchUserException;
@@ -50,6 +53,7 @@ import server.storage.UserMap;
 import server.storage.UserStorage;
 import user.InvalidLoginException;
 import user.InvalidLogoutException;
+import user.SameUserException;
 import user.WrongCredentialsException;
 
 /**
@@ -92,7 +96,6 @@ public class ServerMain
 		private static final String LOGIN_SUCCESS = " has now logged in";
 		private static final String CLIENT_ALREADY_LOGGED_IN = "Client has already logged in";
 		private static final String LOGOUT_SUCCESS = " has now logged out";
-		private static final String ALREADY_FOLLOWS = " is already following ";
 		private static final String FOLLOW_SUCCESS = " is now following ";
 		private static final String UNFOLLOW_SUCCESS = " has now stopped following ";
 		private static final String NOT_FOLLOWING = " is not following ";
@@ -409,7 +412,7 @@ public class ServerMain
 								{
 									boolean result = false;
 									try { result = users.handleFollowUser(username, followed); }
-									catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
+									catch (IllegalArgumentException | NoSuchUserException | SameUserException e)
 									{
 										exceptionCaught = true;
 										try
@@ -426,7 +429,7 @@ public class ServerMain
 											try
 											{
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-												answerConstructor.write((username + ALREADY_FOLLOWS + followed).getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + "is already following " + followed).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
@@ -753,105 +756,115 @@ public class ServerMain
 							}
 						}
 					}
-
+					else if (elem.getAsString().equals(CommandCode.RATE.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("vote");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								final String vote = elem.getAsString();
+								elem = jsonMessage.get("postid");
+								if (elem == null) syntaxErrorHandler(answerConstructor);
+								else
+								{
+									if (loggedInClients.get(client).equals(username))
+									{
+										try { posts.handleRate(username, users, Integer.parseInt(elem.getAsString()), Vote.fromValue(Integer.parseInt(vote))); }
+										catch (NumberFormatException e)
+										{
+											exceptionCaught = true;
+											syntaxErrorHandler(answerConstructor);
+										}
+										catch (NoSuchPostException | InvalidVoteException e)
+										{
+											exceptionCaught = true;
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										if (!exceptionCaught)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Vote has now been cast.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+									else invalidUsernameHandler(answerConstructor, username);
+								}
+							}
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.COMMENT.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("contents");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								final String contents = elem.getAsString();
+								elem = jsonMessage.get("postid");
+								if (elem == null) syntaxErrorHandler(answerConstructor);
+								else
+								{
+									if (loggedInClients.get(client).equals(username))
+									{
+										try { posts.handleAddComment(username, users, Integer.parseInt(elem.getAsString()), contents); }
+										catch (NumberFormatException e)
+										{
+											exceptionCaught = true;
+											syntaxErrorHandler(answerConstructor);
+										}
+										catch (InvalidCommentException | NoSuchPostException e)
+										{
+											exceptionCaught = true;
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										if (!exceptionCaught)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Comment has now been added.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+									else invalidUsernameHandler(answerConstructor, username);
+								}
+							}
+						}
+					}
 					else syntaxErrorHandler(answerConstructor);
-				/**
-				else if (command[0].equals(CommandCode.COMMENT.getDescription()))
-				{
-					if (command.length != 4)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { posts.handleAddComment(command[1], users, Integer.parseInt(command[2]), command[3]); }
-							catch (InvalidCommentException | NoSuchPostException | NumberFormatException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + " has now added a new comment.").getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
-				else if (command[0].equals(CommandCode.RATE.getDescription()))
-				{
-					if (command.length != 4)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { posts.handleRate(command[1], users, Integer.parseInt(command[2]), Vote.fromValue(Integer.parseInt(command[3]))); }
-							catch (NoSuchPostException | NumberFormatException | InvalidVoteException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + " has now rated a post.").getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				*/
 
-				putByteArray(buffer, size, answerConstructor.toByteArray());
-				buffer.flip();
-				
-				toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
-				selector.wakeup();
-				return;
+					putByteArray(buffer, size, answerConstructor.toByteArray());
+					buffer.flip();
+
+					toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
+					selector.wakeup();
+					return;
+				}
 			}
 		}
-	}
 
 		private static <T> int SetToByteArray(Set<T> set, ByteArrayOutputStream dst)
 		throws IOException

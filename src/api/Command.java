@@ -536,6 +536,34 @@ public class Command
 		}
 	}
 
+	public static int ratePost(final String voter, final int postID, final int vote, final SocketChannel server, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(voter, "Author" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\", \"%s\": \"%d\" }", COMMAND, CommandCode.RATE.description,
+				USERNAME, voter, POSTID, postID, "vote", vote).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
 	/**
 	public static int comment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
@@ -551,34 +579,6 @@ public class Command
 
 		buffer.flip(); buffer.clear();
 		bytes = (CommandCode.COMMENT.description + Constants.DELIMITER + author + Constants.DELIMITER + postID + Constants.DELIMITER + contents)
-			.getBytes(StandardCharsets.US_ASCII);
-		Communication.send(server, buffer, bytes);
-		buffer.flip(); buffer.clear();
-		sb = new StringBuilder();
-		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
-		r = Response.parseAnswer(sb.toString());
-		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		if (r.code == ResponseCode.OK) return 0;
-		else
-		{
-			printIf(r, verbose);
-			return 1;
-		}
-	}
-
-	public static int rate(final String voter, final int postID, final int vote, final SocketChannel server, final boolean verbose)
-	throws IOException, NullPointerException
-	{
-		Objects.requireNonNull(voter, "Author" + NULL_ERROR);
-		Objects.requireNonNull(server, "Server" + NULL_ERROR);
-
-		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
-		byte[] bytes = null;
-		Response<String> r = null;
-		StringBuilder sb = null;
-
-		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.RATE.description + Constants.DELIMITER + voter + Constants.DELIMITER + postID + Constants.DELIMITER + vote)
 			.getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
