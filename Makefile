@@ -38,7 +38,10 @@ TARGETS = run-client run-server build
 .WrongCredentialsException:
 	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
 
-.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException
+.SameUserException:
+	$(JC) $(CP) $(JFLAGS) src/user/SameUserException.java $(OUTPUTDIR)
+
+.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .SameUserException
 	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
 
 .InvalidCommentException:
