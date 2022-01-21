@@ -32,16 +32,13 @@ TARGETS = run-client run-server build
 .InvalidLogoutException:
 	$(JC) $(CP) $(JFLAGS) src/user/InvalidLogoutException.java $(OUTPUTDIR)
 
-.InvalidUsernameException:
-	$(JC) $(CP) $(JFLAGS) src/user/InvalidUsernameException.java $(OUTPUTDIR)
-
 .TagListTooLongException:
 	$(JC) $(CP) $(JFLAGS) src/user/TagListTooLongException.java $(OUTPUTDIR)
 
 .WrongCredentialsException:
 	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
 
-.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .InvalidUsernameException
+.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException
 	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
 
 .InvalidCommentException:
