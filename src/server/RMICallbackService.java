@@ -3,14 +3,17 @@ package server;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import client.RMIFollowers;
 
 public class RMICallbackService extends UnicastRemoteObject implements RMICallback
 {
-	private Set<RMIFollowers> clients = null;
+	private Map<RMIFollowers, String> clients = null;
 	private Set<RMIFollowers> toDelete = null;
 
 	private static final String NULL_ERROR = " cannot be null.";
@@ -18,14 +21,14 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 	public RMICallbackService()
 	throws RemoteException
 	{
-		this.clients = new HashSet<>();
+		this.clients = new ConcurrentHashMap<>();
 		this.toDelete = new HashSet<>();
 	}
 
-	public void registerForCallback(RMIFollowers client)
+	public void registerForCallback(RMIFollowers client, final String username)
 	throws NullPointerException, RemoteException
 	{
-		clients.add(Objects.requireNonNull(client, "Client" + NULL_ERROR));
+		clients.putIfAbsent(Objects.requireNonNull(client, "Client" + NULL_ERROR), Objects.requireNonNull(username, "Username" + NULL_ERROR));
 	}
 
 	public void unregisterForCallback(RMIFollowers client)
@@ -46,17 +49,18 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 		Objects.requireNonNull(follower, "Follower user's username" + NULL_ERROR);
 		Objects.requireNonNull(followed, "Followed user's username" + NULL_ERROR);
 
-		synchronized(this)
+		for (Entry<RMIFollowers, String> e: clients.entrySet())
 		{
-			for (RMIFollowers c: clients)
+			if (e.getValue().equals(followed))
 			{
-				try { c.registerNewFollower(follower, followed); }
+				RMIFollowers c = e.getKey();
+				try { c.registerNewFollower(follower); }
 				catch (RemoteException clientDisconnected) { toDelete.add(c); }
 			}
-			for (RMIFollowers c: toDelete)
-				clients.remove(c);
-			toDelete = new HashSet<>();
 		}
+		for (RMIFollowers c: toDelete)
+			clients.remove(c);
+		toDelete = new HashSet<>();
 	}
 
 	public void notifyUnfollow(final String follower, final String followed)
@@ -64,16 +68,17 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 		Objects.requireNonNull(follower, "Follower user's username" + NULL_ERROR);
 		Objects.requireNonNull(followed, "Followed user's username" + NULL_ERROR);
 
-		synchronized(this)
+		for (Entry<RMIFollowers, String> e: clients.entrySet())
 		{
-			for (RMIFollowers c: clients)
+			if (e.getValue().equals(followed))
 			{
-				try { c.removeFollower(follower, followed); }
+				RMIFollowers c = e.getKey();
+				try { c.removeFollower(follower); }
 				catch (RemoteException clientDisconnected) { toDelete.add(c); }
 			}
-			for (RMIFollowers c: toDelete)
-				clients.remove(c);
-			toDelete = new HashSet<>();
 		}
+		for (RMIFollowers c: toDelete)
+			clients.remove(c);
+		toDelete = new HashSet<>();
 	}
 }

@@ -19,7 +19,7 @@ import com.google.gson.Gson;
 
 import api.Command;
 import api.Constants;
-import client.RMIFollowersMap;
+import client.RMIFollowersSet;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
 import server.RMICallback;
@@ -67,7 +67,7 @@ public class ClientMain
 		Configuration configuration = null;
 		SocketChannel client = null;
 		RMICallback callback = null;
-		RMIFollowersMap callbackObject = null;
+		RMIFollowersSet callbackObject = null;
 
 		if (args.length >= 1)
 		{
@@ -102,13 +102,10 @@ public class ClientMain
 		{
 			Registry r = LocateRegistry.getRegistry(configuration.portNoRegistry);
 			callback = (RMICallback) r.lookup(configuration.callbackServiceName);
-			callbackObject = new RMIFollowersMap();
-			callback.registerForCallback(callbackObject);
-			System.out.println("RMI Callbacks have now been setup correctly.");
 		}
 		catch (RemoteException | NotBoundException e)
 		{
-			System.err.println("Fatal error occurred while setting up RMI callback.");
+			System.err.println("Fatal error occurred while setting up RMI callbacks.");
 			e.printStackTrace();
 			System.exit(1);
 		}
@@ -168,7 +165,7 @@ public class ClientMain
 			}
 			if (s.equals(Constants.LIST_FOLLOWERS_STRING))
 			{
-				try { resultSet = callbackObject.recoverFollowers(loggedInUsername); }
+				try { resultSet = callbackObject.recoverFollowers(); }
 				catch (NullPointerException e)
 				{
 					System.err.println(NOT_LOGGED_IN);
@@ -250,6 +247,17 @@ public class ClientMain
 					System.out.println("< " + loggedInUsername + " has now logged out.");
 					loggedIn = false;
 					loggedInUsername = null;
+					try
+					{
+						callback.unregisterForCallback(callbackObject);
+						UnicastRemoteObject.unexportObject(callbackObject, true);
+					}
+					catch (RemoteException e)
+					{
+						System.err.println("Fatal error occurred while cleaning up previously allocated resources.");
+						e.printStackTrace();
+						System.exit(1);
+					}
 				}
 				continue;
 			}
@@ -295,7 +303,8 @@ public class ClientMain
 					System.err.println(INVALID_SYNTAX);
 					continue;
 				}
-				try { result = Command.login(command[1], command[2], client, true); }
+				resultSet = new HashSet<>();
+				try { result = Command.login(command[1], command[2], client, resultSet, true); }
 				catch (IOException e)
 				{
 					e.printStackTrace();
@@ -311,6 +320,17 @@ public class ClientMain
 					loggedIn = true;
 					loggedInUsername = command[1];
 					System.out.println("< " + command[1] + LOGIN_SUCCESS);
+					try
+					{
+						callbackObject = new RMIFollowersSet(resultSet);
+						callback.registerForCallback(callbackObject, loggedInUsername);
+					}
+					catch (RemoteException e)
+					{
+						System.err.println("Fatal error occurred while setting up RMI callbacks.");
+						e.printStackTrace();
+						System.exit(1);
+					}
 				}
 				continue;
 			}
@@ -333,6 +353,16 @@ public class ClientMain
 					e.printStackTrace();
 					break;
 				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				if (result == 0)
+				{
+					System.out.println("< " + loggedInUsername + " has now started following " + command[1]);
+					continue;
+				}
 				continue;
 			}
 			if (command[0].equals(Constants.UNFOLLOW_USER_STRING))
@@ -351,6 +381,11 @@ public class ClientMain
 				catch (IOException e)
 				{
 					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
 					break;
 				}
 				if (result == 0)
@@ -443,7 +478,7 @@ public class ClientMain
 				}
 				if (result == 0)
 				{
-					System.out.println("New vote added.");
+					System.out.println("< New vote added.");
 					continue;
 				}
 			}

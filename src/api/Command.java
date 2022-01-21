@@ -80,7 +80,7 @@ public class Command
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
-	public static int login(String username, String password, SocketChannel server, boolean verbose)
+	public static int login(String username, String password, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -93,6 +93,8 @@ public class Command
 		StringBuilder sb = null;
 		String saltDecoded = null;
 		String hashedPassword = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> responsePullFollowers;
 
 		buffer.flip(); buffer.clear();
 		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\"}", COMMAND, CommandCode.LOGINSETUP.description, USERNAME, username)
@@ -121,10 +123,36 @@ public class Command
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		if (r.code == ResponseCode.OK) return 0;
-		else
+		if (r.code != ResponseCode.OK)
 		{
 			printIf(r, verbose);
+			return 1;
+		}
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.PULLFOLLOWERS.description, USERNAME, username)
+				.getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1; // retrieving followers
+		responsePullFollowers = Response.parseAnswer(baos.toByteArray());
+		if (responsePullFollowers == null)
+		{
+			r = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (r == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(r, verbose);
+				return 1;
+			}
+		}
+		if (r.code == ResponseCode.OK)
+		{
+			for (String s: responsePullFollowers.body) dest.add(s);
+			return 0;
+		}
+		else
+		{
+			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
 			return 1;
 		}
 	}

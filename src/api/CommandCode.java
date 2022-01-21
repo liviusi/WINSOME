@@ -9,6 +9,7 @@ public enum CommandCode
 {
 	LOGINSETUP("Login setup"),
 	LOGINATTEMPT("Login"),
+	PULLFOLLOWERS("Pull followers"),
 	LOGOUT("Logout"),
 	LISTUSERS("List users"),
 	LISTFOLLOWING("List following"),

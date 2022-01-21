@@ -104,8 +104,8 @@ TARGETS = run-client run-server build
 .RMIFollowers:
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
 
-.RMIFollowersMap: .RMIFollowers
-	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowersMap.java $(OUTPUTDIR)
+.RMIFollowersSet: .RMIFollowers
+	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowersSet.java $(OUTPUTDIR)
 
 .RMICallback: .RMIFollowers
 	$(JC) $(CP) $(JFLAGS) src/server/RMICallback.java $(OUTPUTDIR)
@@ -134,7 +134,7 @@ TARGETS = run-client run-server build
 .Command: .ServerConfiguration .Constants .CommandCode .Communication .ResponseCode .Response
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
-ClientMain: .Command .RMIFollowersMap .RMICallback
+ClientMain: .Command .RMIFollowersSet .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
 ServerMain: .ServerConfiguration .Passwords .User .RMITask .Constants .CommandCode .BackupTask .Communication .ResponseCode

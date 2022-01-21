@@ -17,9 +17,9 @@ public interface RMIFollowers extends Remote
 	 * @throws NullPointerException if any parameter is null.
 	 * @throws RemoteException if a remote error occurs.
 	 */
-	public void registerNewFollower(String follower, String followed)
+	public void registerNewFollower(final String follower)
 	throws NullPointerException, RemoteException;
 
-	public void removeFollower(final String follower, final String followed)
+	public void removeFollower(final String follower)
 	throws NullPointerException, RemoteException;
 }

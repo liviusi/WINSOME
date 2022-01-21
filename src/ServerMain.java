@@ -215,8 +215,6 @@ public class ServerMain
 									}
 									if (!exceptionCaught)
 									{
-										try { users.recoverFollowers(username).forEach(s -> callbackService.notifyNewFollower(s, username)); }
-										catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										try
 										{
 											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
@@ -265,6 +263,39 @@ public class ServerMain
 									{
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(salt.getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.PULLFOLLOWERS.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								Set<String> result = null;
+								try { result = users.recoverFollowers(username); }
+								catch (NoSuchUserException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										size = SetToByteArray(result, answerConstructor);
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
@@ -426,112 +457,109 @@ public class ServerMain
 							}
 						}
 					}
+					else if (elem.getAsString().equals(CommandCode.UNFOLLOWUSER.description))
+					{
+						elem = jsonMessage.get("follower");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("followed");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								final String unfollowed = elem.getAsString();
+								boolean result = false;
+								if (loggedInClients.get(client).equals(username))
+								{
+									try { result = users.handleUnfollowUser(username, unfollowed); }
+									catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										if (!result)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + NOT_FOLLOWING + unfollowed).getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										else
+										{
+											callbackService.notifyUnfollow(username, unfollowed);
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + UNFOLLOW_SUCCESS + unfollowed).getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+								}
+								else invalidUsernameHandler(answerConstructor, username);
+							}
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.CREATEPOST.description))
+					{
+						elem = jsonMessage.get("author");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("title");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								final String title = elem.getAsString();
+								elem = jsonMessage.get("contents");
+								if (elem == null) syntaxErrorHandler(answerConstructor);
+								else
+								{
+									final String contents = elem.getAsString();
+									if (loggedInClients.get(client).equals(username))
+									{
+										int postID = -1;
+										try { postID = posts.handleCreatePost(username, title, contents); }
+										catch (InvalidPostException e)
+										{
+											exceptionCaught = true;
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										catch (InvalidGeneratorException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										if (!exceptionCaught)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + " has now created a new post: " + postID).getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+									else invalidUsernameHandler(answerConstructor, username);
+								}
+							}
+						}
+					}
 
 					else syntaxErrorHandler(answerConstructor);
 				/**
-				else if (command[0].equals(CommandCode.UNFOLLOWUSER.getDescription()))
-				{
-					if (command.length != 3)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { resultBoolean = users.handleUnfollowUser(command[1], command[2]); }
-							catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							if (!exceptionCaught)
-							{
-								if (!resultBoolean)
-								{
-									try
-									{
-										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-										answerConstructor.write((command[1] + NOT_FOLLOWING + command[2]).getBytes(StandardCharsets.US_ASCII));
-									}
-									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-								}
-								else
-								{
-									String follower = null;
-									try { follower = users.getUserByName(command[1]); }
-									catch (NoSuchUserException | NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-									callbackService.notifyUnfollow(follower, command[2]);
-									try
-									{
-										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-										answerConstructor.write((command[1] + UNFOLLOW_SUCCESS + command[2]).getBytes(StandardCharsets.US_ASCII));
-									}
-									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-								}
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
-				else if (command[0].equals(CommandCode.CREATEPOST.getDescription()))
-				{
-					if (command.length != 4)
-					{
-						try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
-						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-					}
-					else
-					{
-						if (loggedInClients.get(client).equals(command[1]))
-						{
-							try { postID = posts.handleCreatePost(command[1], command[2], command[3]); }
-							catch (InvalidPostException e)
-							{
-								exceptionCaught = true;
-								try
-								{
-									answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-							catch (InvalidGeneratorException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							if (!exceptionCaught)
-							{
-								try
-								{
-									answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-									answerConstructor.write((command[1] + " has now created a new post: " + postID).getBytes(StandardCharsets.US_ASCII));
-								}
-								catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-							}
-						}
-						else
-						{
-							try
-							{
-								answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
-								answerConstructor.write((command[1] + CLIENT_NOT_LOGGED_IN).getBytes(StandardCharsets.US_ASCII));
-							}
-							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
-						}
-					}
-				}
 				else if (command[0].equals(CommandCode.COMMENT.getDescription()))
 				{
 					if (command.length != 4)
