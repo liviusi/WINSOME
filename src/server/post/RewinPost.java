@@ -41,6 +41,11 @@ public class RewinPost extends Post
 			this.author = author;
 			this.contents = contents;
 		}
+
+		public String toString()
+		{
+			return String.format("{\"%s\": \"%s\",\n\"%s\": \"%s\"}", "author", author, "contents", contents);
+		}
 	}
 
 	/** Unique identifier. */
@@ -118,7 +123,7 @@ public class RewinPost extends Post
 	public List<String> getComments()
 	{
 		List<String> res = new ArrayList<>();
-		comments.forEach(c -> res.add(c.author + "\r\n" + c.contents));
+		comments.forEach(c -> res.add(c.toString()));
 		return res;
 	}
 
@@ -174,10 +179,5 @@ public class RewinPost extends Post
 	public int hashCode()
 	{
 		return Integer.valueOf(id).hashCode();
-	}
-
-	public String toString()
-	{
-		return String.format("{ \"%s\": \"%d\",\n \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%s\"}", "id", id, "author", author, "title", title, "contents", contents);
 	}
 }

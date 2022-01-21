@@ -40,8 +40,6 @@ public class ClientMain
 		public final String username;
 		public final String[] tags;
 
-		public static final Gson gson = new Gson();
-
 		private User(String username, String[] tags)
 		{
 			this.username = username;
@@ -50,32 +48,65 @@ public class ClientMain
 
 		public static User fromJSON(String jsonString)
 		{
-			User u = gson.fromJson(jsonString, User.class);
-			return u;
+			return gson.fromJson(jsonString, User.class);
+		}
+	}
+
+	private static class PostPreview
+	{
+		public final int id;
+		public final String author;
+		public final String title;
+
+		public static final Gson gson = new Gson();
+
+		private PostPreview(final int id, final String author, final String title)
+		{
+			this.id = id;
+			this.author = author;
+			this.title = title;
+		}
+
+		public static PostPreview fromJSON(String jsonString)
+		{
+			return gson.fromJson(jsonString, PostPreview.class);
 		}
 	}
 
 	private static class Post
 	{
+		private static class Comment
+		{
+			public final String author;
+			public final String contents;
+
+			private Comment(String author, String contents)
+			{
+				this.author = author;
+				this.contents = contents;
+			}
+		}
+
 		public final int id;
-		public final String author;
 		public final String title;
 		public final String contents;
+		public final int upvotes;
+		public final int downvotes;
+		public final Comment[] comments;
 
-		public static final Gson gson = new Gson();
-
-		private Post(final int id, final String author, final String title, final String contents)
+		private Post(int id, String title, String contents, int upvotes, int downvotes, Comment[] comments)
 		{
 			this.id = id;
-			this.author = author;
 			this.title = title;
 			this.contents = contents;
+			this.upvotes = upvotes;
+			this.downvotes = downvotes;
+			this.comments = comments;
 		}
 
 		public static Post fromJSON(String jsonString)
 		{
-			Post p = gson.fromJson(jsonString, Post.class);
-			return p;
+			return gson.fromJson(jsonString, Post.class);
 		}
 	}
 
@@ -97,8 +128,11 @@ public class ClientMain
 	private static final String BLOG_STRING = "blog";
 	private static final String CREATE_POST_STRING = "post";
 	private static final String SHOW_FEED_STRING = "show feed";
-	private static final String COMMENT_STRING = "comment";
-	private static final String RATE_STRING = "rate";
+	private static final String SHOW_POST_STRING = "show post";
+	// private static final String COMMENT_STRING = "comment";
+	// private static final String RATE_STRING = "rate";
+
+	private static final Gson gson = new Gson();
 
 
 	public static void main(String[] args)
@@ -329,7 +363,7 @@ public class ClientMain
 						System.out.println("< --------------------------------------------------------------------------");
 						for (String p: resultSet)
 						{
-							Post tmp = Post.fromJSON(p);
+							PostPreview tmp = PostPreview.fromJSON(p);
 							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
 						}
 					}
@@ -364,7 +398,7 @@ public class ClientMain
 						System.out.println("< --------------------------------------------------------------------------");
 						for (String p: resultSet)
 						{
-							Post tmp = Post.fromJSON(p);
+							PostPreview tmp = PostPreview.fromJSON(p);
 							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
 						}
 					}
@@ -506,12 +540,12 @@ public class ClientMain
 			}
 			if (command[0].equals(CREATE_POST_STRING))
 			{
-				StringBuilder sb = new StringBuilder();
 				if (command.length != 3)
 				{
 					System.err.println(INVALID_SYNTAX);
 					continue;
 				}
+				StringBuilder sb = new StringBuilder();
 				try { result = Command.createPost(loggedInUsername, command[1], command[2], client, true, sb); }
 				catch (NullPointerException e)
 				{
@@ -532,6 +566,44 @@ public class ClientMain
 				{
 					System.out.println("< New post created: ID " + sb.toString());
 					continue;
+				}
+			}
+			if (String.format("%s %s", command[0], command[1]).equals(SHOW_POST_STRING))
+			{
+				if (command.length != 3)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				StringBuilder sb = new StringBuilder();
+				try { result = Command.showPost(loggedInUsername, Integer.parseInt(command[2]), client, sb, true); }
+				catch (NumberFormatException e)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				catch (NullPointerException e)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				if (result == 0)
+				{
+					Post p = Post.fromJSON(sb.toString());
+					System.out.printf("< ID: %d\n< Title: %s\n< Contents: %s\n< Upvotes: %d - Downvotes: %d\n< Comments: %d\n",
+							p.id, p.title, p.contents, p.upvotes, p.downvotes, p.comments.length);
+					for (Post.Comment c : p.comments)
+						System.out.printf("%s:\n\"%s\"\n", c.author, c.contents);
 				}
 			}
 			/**

@@ -39,11 +39,8 @@ import configuration.ServerConfiguration;
 import server.BackupTask;
 import server.RMICallbackService;
 import server.RMITask;
-import server.post.InvalidCommentException;
 import server.post.InvalidGeneratorException;
 import server.post.InvalidPostException;
-import server.post.InvalidVoteException;
-import server.post.Post.Vote;
 import server.storage.IllegalArchiveException;
 import server.storage.NoSuchPostException;
 import server.storage.NoSuchUserException;
@@ -598,6 +595,50 @@ public class ServerMain
 								}
 							}
 							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.SHOWPOST.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("postid");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								if (loggedInClients.get(client).equals(username))
+								{
+									String result = null;
+									try { result = posts.handleShowPost(Integer.parseInt(elem.getAsString())); }
+									catch (NumberFormatException e)
+									{
+										exceptionCaught = true;
+										syntaxErrorHandler(answerConstructor);
+									}
+									catch (NoSuchPostException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										try
+										{
+											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(result.getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+								}
+								else invalidUsernameHandler(answerConstructor, username);
+							}
 						}
 					}
 

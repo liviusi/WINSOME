@@ -18,6 +18,7 @@ public enum CommandCode
 	VIEWBLOG("Blog"),
 	CREATEPOST("Post"),
 	SHOWFEED("Show feed"),
+	SHOWPOST("Show post"),
 	COMMENT("Comment"),
 	RATE("Rate");
 

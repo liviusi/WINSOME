@@ -104,7 +104,7 @@ public class PostMap extends Storage implements PostStorage
 			Post p = postsBackedUp.get(id);
 			if (p == null) p = postsToBeBackedUp.get(id);
 			if (p == null) throw new IllegalStateException("Posts' storage is not in a consistent state."); // should never happen
-			r.add(p.toString());
+			r.add(postToPreview(p));
 		});
 
 		return r;
@@ -123,7 +123,7 @@ public class PostMap extends Storage implements PostStorage
 			.map(s -> new Gson().fromJson(s, JsonObject.class).get("username").getAsString())
 			.forEach(followingUsername ->
 				Optional.ofNullable(postsByAuthor.get(followingUsername)).orElseGet(HashSet<Integer>::new)
-				.forEach(id -> r.add(postsBackedUp.get(id).toString()))
+				.forEach(id -> r.add(postToPreview(postsBackedUp.get(id))))
 			);
 
 		return r;
@@ -138,7 +138,7 @@ public class PostMap extends Storage implements PostStorage
 		if (p == null) p = postsToBeBackedUp.get(id);
 		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
 
-		return p.getTitle() + "\r\n" + p.getContents() + "\r\n" + p.getUpvotesNo() + "\r\n" + p.getDownvotesNo() + "\r\n" + String.join("\r\n", p.getComments());
+		return postToShow(p);
 	}
 
 	public synchronized boolean handleDeletePost(final String username, final int id)
@@ -404,5 +404,17 @@ public class PostMap extends Storage implements PostStorage
 		}
 		catch (NoSuchUserException | NullPointerException e) { return false; }
 		return feed.contains(p);
+	}
+
+	private static String postToPreview(final Post p)
+	{
+		return String.format("{ \"%s\": \"%d\",\n \"%s\": \"%s\",\n \"%s\": \"%s\"}", "id", p.getID(), "author", p.getAuthor(), "title", p.getTitle());
+	}
+
+	private static String postToShow(final Post p)
+	{
+		return String.format("{ \"%s\": \"%d\",\n\"%s\": \"%s\",\n\"%s\": \"%s\",\n\"%s\": \"%d\",\n\"%s\": \"%d\",\n\"%s\": [%s]}",
+				"id", p.getID(), "title", p.getTitle(), "contents", p.getContents(), "upvotes", p.getUpvotesNo(), "downvotes", p.getDownvotesNo(), "comments",
+				String.join(", ", p.getComments()));
 	}
 }

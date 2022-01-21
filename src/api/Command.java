@@ -40,6 +40,7 @@ public class Command
 	private static final String AUTHOR = "author";
 	private static final String TITLE = "title";
 	private static final String CONTENTS = "contents";
+	private static final String POSTID = "postid";
 
 	/**
 	 * @brief Signs up a user to WINSOME.
@@ -444,6 +445,39 @@ public class Command
 		}
 		for (String s: r.body) dest.add(s);
 		return 0;
+	}
+
+	public static int showPost(String username, int id, SocketChannel server, StringBuilder dest, boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Destination" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%d\" }", COMMAND, CommandCode.SHOWPOST.description, USERNAME,
+				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		sb = new StringBuilder();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK)
+		{
+			dest.append(r.body);
+			return 0;
+		}
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
 	}
 
 	/**
