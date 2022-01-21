@@ -62,7 +62,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException
+		PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(password, "Password" + NULL_PARAM_ERROR);
@@ -383,7 +383,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			}
 			reader.endObject();
 			try { u = new User(username, hashPassword, tags, saltDecoded); }
-			catch (InvalidTagException | TagListTooLongException | InvalidUsernameException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			catch (InvalidTagException | TagListTooLongException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			map.usersBackedUp.put(username, u);
 			map.followersMap.put(u, new HashSet<>());
 		}

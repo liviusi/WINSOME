@@ -285,12 +285,17 @@ public class PostMap extends Storage implements PostStorage
 			String author = null;
 			String title = null;
 			String contents = null;
+			int id = -1;
 			Post p = null;
-			for (int i = 0; i < 3; i++)
+			for (int i = 0; i < 4; i++)
 			{
 				name = reader.nextName();
 				switch (name)
 				{
+					case "id":
+						id = Integer.parseInt(reader.nextString());
+						break;
+
 					case "author":
 						author = reader.nextString();
 						break;
@@ -309,7 +314,11 @@ public class PostMap extends Storage implements PostStorage
 				}
 			}
 			reader.endObject();
-			try { p = new RewinPost(author, title, contents); }
+			try
+			{
+				p = new RewinPost(author, title, contents);
+				if (id != p.getID()) throw new IllegalArchiveException("Archive is not in a consistent state.");
+			}
 			catch (InvalidPostException | InvalidGeneratorException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			map.postsBackedUp.put(p.getID(), p);
 			if (map.postsByAuthor.get(author) == null)

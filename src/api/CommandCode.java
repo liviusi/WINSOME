@@ -15,7 +15,9 @@ public enum CommandCode
 	LISTFOLLOWING("List following"),
 	FOLLOWUSER("Follow"),
 	UNFOLLOWUSER("Unfollow"),
+	VIEWBLOG("Blog"),
 	CREATEPOST("Post"),
+	SHOWFEED("Show feed"),
 	COMMENT("Comment"),
 	RATE("Rate");
 

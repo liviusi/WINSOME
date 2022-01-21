@@ -39,7 +39,7 @@ public interface PostStorage
 	 * @throws NullPointerException if author is null.
 	 */
 	public Set<String> handleBlog(final String author)
-	throws NoSuchPostException, NullPointerException;
+	throws NullPointerException;
 
 	/**
 	 * @brief Handles show feed command.
@@ -61,7 +61,6 @@ public interface PostStorage
 	 * COMMENT_{1}, "\r\n", ..., "\r\n", {COMMENT_n}) with TITLE the title of the post, CONTENTS its contents, UPVOTES_NO the number
 	 * of upvotes it has received, DOWNVOTES_NO the number of downvotes, COMMENT_{i} the i-th comment the post has received;
 	 * a comment follows this format: CONCAT(AUTHOR, "\r\n", CONTENTS) with AUTHOR its author and CONTENTS its contents.
-	 * @throws NoSuchPostException if id does not belong to WINSOME registered posts' set.
 	 */
 	public String handleShowPost(final int id)
 	throws NoSuchPostException;

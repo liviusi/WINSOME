@@ -116,9 +116,6 @@ TARGETS = run-client run-server build
 .RMITask: .User .UserMap .RMICallbackService .PostMap
 	$(JC) $(CP) $(JFLAGS) src/server/RMITask.java $(OUTPUTDIR)
 
-.Constants:
-	$(JC) $(CP) $(JFLAGS) src/api/Constants.java $(OUTPUTDIR)
-
 .CommandCode:
 	$(JC) $(CP) $(JFLAGS) src/api/CommandCode.java $(OUTPUTDIR)
 
@@ -131,13 +128,13 @@ TARGETS = run-client run-server build
 .Communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.Command: .ServerConfiguration .Constants .CommandCode .Communication .ResponseCode .Response
+.Command: .ServerConfiguration .CommandCode .Communication .ResponseCode .Response
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
 ClientMain: .Command .RMIFollowersSet .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-ServerMain: .ServerConfiguration .Passwords .User .RMITask .Constants .CommandCode .BackupTask .Communication .ResponseCode
+ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: ServerMain ClientMain

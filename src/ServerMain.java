@@ -29,7 +29,6 @@ import com.google.gson.JsonObject;
 
 import api.CommandCode;
 import api.Communication;
-import api.Constants;
 import api.ResponseCode;
 
 import java.util.concurrent.LinkedBlockingQueue;
@@ -160,13 +159,6 @@ public class ServerMain
 				buffer.clear();
 				message = sb.toString();
 				clientName = Integer.toString(client.hashCode());
-				if (message.equals(Constants.QUIT_STRING))
-				{
-					System.out.printf("client %s is now quitting.\n", clientName);
-					try { client.close(); }
-					catch (IOException ignored) { }
-					return;
-				}
 				System.out.printf("> client %s: \"%s\"\n", clientName, message);
 				jsonMessage = new Gson().fromJson(message, JsonObject.class);
 				elem = jsonMessage.get("command");
@@ -508,6 +500,23 @@ public class ServerMain
 								}
 								else invalidUsernameHandler(answerConstructor, username);
 							}
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.VIEWBLOG.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							Set<String> result = null;
+							result = posts.handleBlog(username);
+							try
+							{
+								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+								size = SetToByteArray(result, answerConstructor);
+							}
+							catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.CREATEPOST.description))

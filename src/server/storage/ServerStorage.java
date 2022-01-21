@@ -13,7 +13,6 @@ import server.post.InvalidPostException;
 import user.InvalidLoginException;
 import user.InvalidLogoutException;
 import user.InvalidTagException;
-import user.InvalidUsernameException;
 import user.TagListTooLongException;
 import user.WrongCredentialsException;
 
@@ -30,7 +29,7 @@ public class ServerStorage
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
-		PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException
+		PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
 		users.register(username, password, tags, salt);
 	}

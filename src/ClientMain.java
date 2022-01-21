@@ -18,7 +18,6 @@ import java.util.regex.Pattern;
 import com.google.gson.Gson;
 
 import api.Command;
-import api.Constants;
 import client.RMIFollowersSet;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
@@ -27,7 +26,6 @@ import server.storage.PasswordNotValidException;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
 import user.InvalidTagException;
-import user.InvalidUsernameException;
 import user.TagListTooLongException;
 
 /**
@@ -41,6 +39,7 @@ public class ClientMain
 	{
 		public final String username;
 		public final String[] tags;
+
 		public static final Gson gson = new Gson();
 
 		private User(String username, String[] tags)
@@ -56,10 +55,50 @@ public class ClientMain
 		}
 	}
 
+	private static class Post
+	{
+		public final int id;
+		public final String author;
+		public final String title;
+		public final String contents;
+
+		public static final Gson gson = new Gson();
+
+		private Post(final int id, final String author, final String title, final String contents)
+		{
+			this.id = id;
+			this.author = author;
+			this.title = title;
+			this.contents = contents;
+		}
+
+		public static Post fromJSON(String jsonString)
+		{
+			Post p = gson.fromJson(jsonString, Post.class);
+			return p;
+		}
+	}
+
 	private static final String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
 	private static final String LOGIN_SUCCESS = " has now logged in.";
 	private static final String NOT_LOGGED_IN = "Client has yet to login";
 	private static final String INVALID_SYNTAX = "Invalid syntax. Type \"help\" to find out which commands are available.";
+
+	private static final String QUIT_STRING = ":q!";
+	private static final String HELP_STRING = "help";
+	private static final String REGISTER_STRING = "register";
+	private static final String LOGIN_STRING = "login";
+	private static final String LOGOUT_STRING = "logout";
+	private static final String LIST_USERS_STRING = "list users";
+	private static final String LIST_FOLLOWERS_STRING = "list followers";
+	private static final String LIST_FOLLOWING_STRING = "list following";
+	private static final String FOLLOW_USER_STRING = "follow";
+	private static final String UNFOLLOW_USER_STRING = "unfollow";
+	private static final String BLOG_STRING = "blog";
+	private static final String CREATE_POST_STRING = "post";
+	private static final String COMMENT_STRING = "comment";
+	private static final String RATE_STRING = "rate";
+
 
 	public static void main(String[] args)
 	{
@@ -122,13 +161,13 @@ public class ClientMain
 			if (!loggedIn) System.out.printf("> ");
 			else System.out.printf("%s> ", loggedInUsername);
 			String s = scanner.nextLine();
-			if (s.equalsIgnoreCase(Constants.QUIT_STRING)) break;
-			if (s.equalsIgnoreCase(Constants.HELP_STRING))
+			if (s.equalsIgnoreCase(QUIT_STRING)) break;
+			if (s.equalsIgnoreCase(HELP_STRING))
 			{
 				System.out.printf("register <username> <password> <tags>:\n\tRegister.\n");
 				continue;
 			}
-			if (s.equals(Constants.LIST_USERS_STRING))
+			if (s.equals(LIST_USERS_STRING))
 			{
 				resultSet = new HashSet<>();
 				try { result = Command.listUsers(loggedInUsername, client, true, resultSet); }
@@ -163,7 +202,7 @@ public class ClientMain
 					continue;
 				}
 			}
-			if (s.equals(Constants.LIST_FOLLOWERS_STRING))
+			if (s.equals(LIST_FOLLOWERS_STRING))
 			{
 				try { resultSet = callbackObject.recoverFollowers(); }
 				catch (NullPointerException e)
@@ -185,7 +224,7 @@ public class ClientMain
 				}
 				continue;
 			}
-			if (s.equals(Constants.LIST_FOLLOWING_STRING))
+			if (s.equals(LIST_FOLLOWING_STRING))
 			{
 				resultSet = new HashSet<>();
 				try { result = Command.listFollowing(loggedInUsername, client, true, resultSet); }
@@ -220,7 +259,7 @@ public class ClientMain
 					continue;
 				}
 			}
-			if (s.equals(Constants.LOGOUT_STRING))
+			if (s.equals(LOGOUT_STRING))
 			{
 				try
 				{
@@ -261,8 +300,43 @@ public class ClientMain
 				}
 				continue;
 			}
+			if (s.equals(BLOG_STRING))
+			{
+				if (loggedInUsername == null)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				resultSet = new HashSet<>();
+				try { result = Command.blog(loggedInUsername, client, resultSet, true); }
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				else
+				{
+					if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start posting.");
+					else
+					{
+						System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
+						System.out.println("< --------------------------------------------------------------------------");
+						for (String p: resultSet)
+						{
+							Post tmp = Post.fromJSON(p);
+							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+						}
+					}
+					continue;
+				}
+			}
 			String[] command = parseQuotes(s);
-			if (command[0].equals(Constants.REGISTER_STRING))
+			if (command[0].equals(REGISTER_STRING))
 			{
 				int len = command.length;
 				if (len < 3)
@@ -279,7 +353,7 @@ public class ClientMain
 					System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
 					break;
 				}
-				catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException | InvalidUsernameException e)
+				catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
 				{
 					System.err.printf("Given credentials do not meet the requirements:\n%s\n", e.getMessage());
 					continue;
@@ -296,7 +370,7 @@ public class ClientMain
 				}
 				continue;
 			}
-			if (command[0].equals(Constants.LOGIN_STRING))
+			if (command[0].equals(LOGIN_STRING))
 			{
 				if (command.length != 3)
 				{
@@ -334,7 +408,7 @@ public class ClientMain
 				}
 				continue;
 			}
-			if (command[0].equals(Constants.FOLLOW_USER_STRING))
+			if (command[0].equals(FOLLOW_USER_STRING))
 			{
 				if (command.length != 2)
 				{
@@ -365,7 +439,7 @@ public class ClientMain
 				}
 				continue;
 			}
-			if (command[0].equals(Constants.UNFOLLOW_USER_STRING))
+			if (command[0].equals(UNFOLLOW_USER_STRING))
 			{
 				if (command.length != 2)
 				{
@@ -394,7 +468,7 @@ public class ClientMain
 					continue;
 				}
 			}
-			if (command[0].equals(Constants.CREATE_POST_STRING))
+			if (command[0].equals(CREATE_POST_STRING))
 			{
 				StringBuilder sb = new StringBuilder();
 				if (command.length != 3)
@@ -424,7 +498,8 @@ public class ClientMain
 					continue;
 				}
 			}
-			if (command[0].equals(Constants.COMMENT_STRING))
+			/**
+			if (command[0].equals(COMMENT_STRING))
 			{
 				if (command.length != 3)
 				{
@@ -453,7 +528,7 @@ public class ClientMain
 					continue;
 				}
 			}
-			if (command[0].equals(Constants.RATE_STRING))
+			if (command[0].equals(RATE_STRING))
 			{
 				if (command.length != 3)
 				{
@@ -482,6 +557,7 @@ public class ClientMain
 					continue;
 				}
 			}
+			*/
 		}
 		System.out.println("Client is now freeing resources...");
 		try

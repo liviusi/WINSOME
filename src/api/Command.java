@@ -18,7 +18,6 @@ import server.storage.UserRMIStorage;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
 import user.InvalidTagException;
-import user.InvalidUsernameException;
 import user.TagListTooLongException;
 
 /**
@@ -28,6 +27,7 @@ import user.TagListTooLongException;
 
 public class Command
 {
+	private static final int BUFFERSIZE = 2048;
 	/** Used as an error message whenever response's parsing fails. */
 	private static final String RESPONSE_FAILURE = "Server response could not be parsed properly.";
 	/** Used as an error message whenever an input parameter is null. */
@@ -60,7 +60,7 @@ public class Command
 	 */
 	public static void register(String username, String password, Set<String> tags, int portNo, String serviceName, boolean verbose)
 	throws RemoteException, NotBoundException, NullPointerException, UsernameNotValidException, UsernameAlreadyExistsException,
-			PasswordNotValidException, InvalidTagException, TagListTooLongException, InvalidUsernameException
+			PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
 		Registry r = LocateRegistry.getRegistry(portNo);
 		UserRMIStorage service = (UserRMIStorage) r.lookup(Objects.requireNonNull(serviceName, "Service to search for cannot be null."));
@@ -87,7 +87,7 @@ public class Command
 		Objects.requireNonNull(password, "Password" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server channel" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -172,7 +172,7 @@ public class Command
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -211,7 +211,7 @@ public class Command
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		Response<Set<String>> r = null;
@@ -232,16 +232,8 @@ public class Command
 				return 1;
 			}
 		}
-		if (r.code == ResponseCode.OK)
-		{
-			for (String s: r.body) dest.add(s);
-			return 0;
-		}
-		else
-		{
-			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
-			return 1;
-		}
+		for (String s: r.body) dest.add(s);
+		return 0;
 	}
 
 	/**
@@ -261,7 +253,7 @@ public class Command
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		Response<Set<String>> r = null;
@@ -282,16 +274,8 @@ public class Command
 				return 1;
 			}
 		}
-		if (r.code == ResponseCode.OK)
-		{
-			for (String s: r.body) dest.add(s);
-			return 0;
-		}
-		else
-		{
-			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
-			return 1;
-		}
+		for (String s: r.body) dest.add(s);
+		return 0;
 	}
 
 
@@ -312,7 +296,7 @@ public class Command
 		Objects.requireNonNull(followed, "User to be followed's username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -341,7 +325,7 @@ public class Command
 		Objects.requireNonNull(followed, "User to be unfollowed's username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -363,6 +347,38 @@ public class Command
 		}
 	}
 
+	public static int blog(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(author, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> r = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.VIEWBLOG.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
+		r = Response.parseAnswer(baos.toByteArray());
+		if (r == null)
+		{
+			Response<String> retry = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (retry == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(retry, verbose);
+				return 1;
+			}
+		}
+		for (String s: r.body) dest.add(s);
+		return 0;
+	}
+
 	public static int post(final String author, final String title, final String contents, final SocketChannel server, final boolean verbose, StringBuilder dest)
 	throws IOException, NullPointerException
 	{
@@ -372,7 +388,7 @@ public class Command
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 		Objects.requireNonNull(dest, "Destination" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -388,7 +404,6 @@ public class Command
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
 		if (r.code == ResponseCode.OK)
 		{
-			// dest.append(r.body.replaceAll("^.*?(\\w+)\\W*$", "$1"));
 			dest.append(r.body);
 			return 0;
 		}
@@ -399,6 +414,7 @@ public class Command
 		}
 	}
 
+	/**
 	public static int comment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -406,7 +422,7 @@ public class Command
 		Objects.requireNonNull(contents, "Contents" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -434,7 +450,7 @@ public class Command
 		Objects.requireNonNull(voter, "Author" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
-		ByteBuffer buffer = ByteBuffer.allocate(Constants.BUFFERSIZE);
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
 		Response<String> r = null;
 		StringBuilder sb = null;
@@ -455,6 +471,7 @@ public class Command
 			return 1;
 		}
 	}
+	*/
 
 	/**
 	 * @brief Prints on System.out if flag is toggled on.
