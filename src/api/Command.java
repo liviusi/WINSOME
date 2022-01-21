@@ -98,7 +98,7 @@ public class Command
 		Response<Set<String>> responsePullFollowers;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\"}", COMMAND, CommandCode.LOGINSETUP.description, USERNAME, username)
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\"}", COMMAND, CommandCode.LOGINSETUP.description, USERNAME, username)
 				.getBytes(StandardCharsets.US_ASCII);
 		// Login setup:<username>
 		Communication.send(server, buffer, bytes);
@@ -115,7 +115,7 @@ public class Command
 		saltDecoded = r.body;
 		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LOGINATTEMPT.description, USERNAME,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LOGINATTEMPT.description, USERNAME,
 				username, HASHEDPASSWORD, hashedPassword).getBytes(StandardCharsets.US_ASCII);
 		// Login:<username>:<hash(password, salt)>
 		Communication.send(server, buffer, bytes);
@@ -130,7 +130,7 @@ public class Command
 			return 1;
 		}
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.PULLFOLLOWERS.description, USERNAME, username)
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.PULLFOLLOWERS.description, USERNAME, username)
 				.getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -179,7 +179,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LOGOUT.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LOGOUT.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		// Logout:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -218,7 +218,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LISTUSERS.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LISTUSERS.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -260,7 +260,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.LISTFOLLOWING.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LISTFOLLOWING.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -303,7 +303,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.FOLLOWUSER.description, FOLLOWER,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.FOLLOWUSER.description, FOLLOWER,
 				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -332,7 +332,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.UNFOLLOWUSER.description, FOLLOWER,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.UNFOLLOWUSER.description, FOLLOWER,
 				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -361,7 +361,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.VIEWBLOG.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.VIEWBLOG.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -395,7 +395,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\"\n, \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.CREATEPOST.description,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.CREATEPOST.description,
 				AUTHOR, author, TITLE, title, CONTENTS, contents).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -428,7 +428,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\" }", COMMAND, CommandCode.SHOWFEED.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.SHOWFEED.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -460,7 +460,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%d\" }", COMMAND, CommandCode.SHOWPOST.description, USERNAME,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.SHOWPOST.description, USERNAME,
 				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -492,7 +492,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%d\" }", COMMAND, CommandCode.DELETEPOST.description, USERNAME,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.DELETEPOST.description, USERNAME,
 				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -520,7 +520,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\",\n \"%s\": \"%s\",\n \"%s\": \"%d\" }", COMMAND, CommandCode.REWIN.description, USERNAME,
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.REWIN.description, USERNAME,
 				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();

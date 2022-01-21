@@ -180,7 +180,7 @@ public class User
 
 	public String toString()
 	{
-		return String.format("{ \"username\": \"%s\",\n\"tags\":\n[%s]", username, setToString(tags)) + "}";
+		return String.format("{ \"username\": \"%s\", \"tags\": [%s]", username, setToString(tags)) + "}";
 	}
 
 	private <T> String setToString(Set<T> set)

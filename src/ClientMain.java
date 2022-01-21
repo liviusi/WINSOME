@@ -92,15 +92,17 @@ public class ClientMain
 		public final String contents;
 		public final int upvotes;
 		public final int downvotes;
+		public final String[] rewonBy;
 		public final Comment[] comments;
 
-		private Post(int id, String title, String contents, int upvotes, int downvotes, Comment[] comments)
+		private Post(int id, String title, String contents, int upvotes, int downvotes, String[] rewonBy, Comment[] comments)
 		{
 			this.id = id;
 			this.title = title;
 			this.contents = contents;
 			this.upvotes = upvotes;
 			this.downvotes = downvotes;
+			this.rewonBy = rewonBy;
 			this.comments = comments;
 		}
 
@@ -596,10 +598,12 @@ public class ClientMain
 				if (result == 0)
 				{
 					Post p = Post.fromJSON(sb.toString());
-					System.out.printf("< ID: %d\n< Title: %s\n< Contents: %s\n< Upvotes: %d - Downvotes: %d\n< Comments: %d\n",
-							p.id, p.title, p.contents, p.upvotes, p.downvotes, p.comments.length);
+					System.out.printf("< ID: %d\n< Title: %s\n< Contents:\n\t%s\n< Upvotes: %d - Downvotes: %d\n< Rewon by: %d\n\t",
+							p.id, p.title, p.contents, p.upvotes, p.downvotes, p.rewonBy.length);
+					for (String r: p.rewonBy) System.out.printf("%s", r);
+					System.out.printf("\n< Comments: %d\n", p.comments.length);
 					for (Post.Comment c : p.comments)
-						System.out.printf("%s:\n\"%s\"\n", c.author, c.contents);
+						System.out.printf("\t%s:\n\"%s\"\n", c.author, c.contents);
 				}
 				continue;
 			}

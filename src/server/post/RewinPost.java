@@ -44,7 +44,7 @@ public class RewinPost extends Post
 
 		public String toString()
 		{
-			return String.format("{\"%s\": \"%s\",\n\"%s\": \"%s\"}", "author", author, "contents", contents);
+			return String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", "author", author, "contents", contents);
 		}
 	}
 
