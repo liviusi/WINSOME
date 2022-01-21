@@ -220,7 +220,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	}
 
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
-	throws NoSuchUserException, NullPointerException
+	throws SameUserException, NoSuchUserException, NullPointerException
 	{
 		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
@@ -421,7 +421,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 						if (!map.handleFollowUser(username, s))
 							throw new IllegalArchiveException(INVALID_STORAGE);
 					}
-					catch (NullPointerException | NoSuchUserException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+					catch (NullPointerException | NoSuchUserException | SameUserException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 				}
 			}
 			reader.endObject();

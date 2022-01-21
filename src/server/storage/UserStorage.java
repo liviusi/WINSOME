@@ -8,6 +8,7 @@ import java.util.Set;
 
 import user.InvalidLoginException;
 import user.InvalidLogoutException;
+import user.SameUserException;
 import user.WrongCredentialsException;
 
 /**
@@ -104,7 +105,7 @@ public interface UserStorage
 	 * @throws NullPointerException if any parameter is null.
 	 */
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
-	throws NoSuchUserException, NullPointerException;
+	throws SameUserException, NoSuchUserException, NullPointerException;
 
 	/**
 	 * @brief Handles unfollow user.
