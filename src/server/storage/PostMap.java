@@ -6,9 +6,12 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,6 +46,7 @@ public class PostMap extends Storage implements PostStorage
 	private Map<Integer, Post> postsToBeBackedUp = null;
 	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
 	private boolean flag = false;
+	private boolean flush = false;
 	private Map<String, Set<Integer>> postsByAuthor = null;
 
 	/** Part of the exception message when NPE is thrown. */
@@ -157,6 +161,7 @@ public class PostMap extends Storage implements PostStorage
 			postsToBeBackedUp.remove(p.getID());
 			postsBackedUp.remove(p.getID());
 			postsByAuthor.get(p.getAuthor()).remove(p.getID());
+			flush = true;
 			return true;
 		}
 		else return false;
@@ -178,9 +183,8 @@ public class PostMap extends Storage implements PostStorage
 		{
 			if (p.addRewin(username))
 			{
-				if (postsByAuthor.get(username) == null)
-					postsByAuthor.put(username, new HashSet<>());
-				postsByAuthor.get(username).add(id);
+				Set<Integer> tmp = new HashSet<>(); tmp.add(id);
+				postsByAuthor.compute(username, (k, v) -> v == null ? tmp : Stream.concat(v.stream(), tmp.stream()).collect(Collectors.toSet()));
 				return true;
 			}
 		}
@@ -228,9 +232,9 @@ public class PostMap extends Storage implements PostStorage
 	public void backupPostsImmutableData(final File backupPostsFile)
 	throws FileNotFoundException, IOException, NullPointerException
 	{
-		Map<Integer, Post> tmp = new HashMap<>(postsToBeBackedUp);
-		postsToBeBackedUp = new ConcurrentHashMap<>();
-		backupCached(new ExclusionStrategy()
+		Objects.requireNonNull(backupPostsFile, "File" + NULL_PARAM_ERROR);
+
+		ExclusionStrategy strat = new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
@@ -243,13 +247,25 @@ public class PostMap extends Storage implements PostStorage
 			{
 				return false;
 			}
-		}, backupPostsFile, postsBackedUp, tmp, flag);
+		};
+
+		if (flush)
+		{
+			flush = false;
+			backupNonCached(strat, backupPostsFile, postsBackedUp);
+		}
+
+		Map<Integer, Post> tmp = new HashMap<>(postsToBeBackedUp);
+		postsToBeBackedUp = new ConcurrentHashMap<>();
+		backupCached(strat, backupPostsFile, postsBackedUp, tmp, flag);
 		flag = false;
 	}
 
 	public void backupPostsMutableData(final File backupPostsMetadataFile)
 	throws FileNotFoundException, IOException, NullPointerException
 	{
+		Objects.requireNonNull(backupPostsMetadataFile, "File" + NULL_PARAM_ERROR);
+
 		backupNonCached(new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
@@ -343,6 +359,7 @@ public class PostMap extends Storage implements PostStorage
 			int id = -1;
 			String author = null;
 			String contents = null;
+			List<String> rewinners = new ArrayList<>();
 			for (int i = 0; i < 5; i++)
 			{
 				name = reader.nextName();
@@ -370,6 +387,13 @@ public class PostMap extends Storage implements PostStorage
 						reader.endArray();
 						break;
 					
+					case "rewonBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							rewinners.add(reader.nextString());
+						reader.endArray();
+						break;
+					
 					default:
 						reader.skipValue();
 						break;
@@ -380,6 +404,11 @@ public class PostMap extends Storage implements PostStorage
 			try { map.handleAddComment(author, users, id, contents); }
 			catch (InvalidCommentException | NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
 			catch (NullPointerException noComments) { }
+			for (String r : rewinners)
+			{
+				try { map.handleRewin(r, users, id); }
+				catch (NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			}
 		}
 		reader.endArray();
 		reader.close();
@@ -390,20 +419,27 @@ public class PostMap extends Storage implements PostStorage
 
 	private boolean feedContainsPost(final String username, final UserStorage users, final Post p)
 	{
-		Set<Post> feed = new HashSet<>();
+		Integer ID = p.getID();
+		boolean result = false;
 		try
 		{
-			users.handleListFollowing(username)
-			.stream()
-			.map(s -> s.split("\r\n")[0]). // discard tags
-			collect(Collectors.toSet())
-			.forEach(followingUsername ->
-				postsByAuthor.get(followingUsername)
+			Iterator<Set<Integer>> it = users.handleListFollowing(username)
 				.stream()
-				.forEach(postID -> feed.add(postsBackedUp.get(postID))));
+				.map(s -> new Gson().fromJson(s, JsonObject.class).get("username").getAsString())
+				.map(followingUsername -> Optional.ofNullable(postsByAuthor.get(followingUsername)).orElseGet(HashSet<Integer>::new))
+				.iterator();
+			while (it.hasNext() && !result)
+			{
+				Set<Integer> tmp = it.next();
+				for (Integer i : tmp)
+				{
+					if (result) break;
+					result = i.equals(ID);
+				}
+			}
 		}
 		catch (NoSuchUserException | NullPointerException e) { return false; }
-		return feed.contains(p);
+		return result;
 	}
 
 	private static String postToPreview(final Post p)

@@ -19,6 +19,8 @@ public enum CommandCode
 	CREATEPOST("Post"),
 	SHOWFEED("Show feed"),
 	SHOWPOST("Show post"),
+	DELETEPOST("Delete post"),
+	REWIN("Rewin"),
 	COMMENT("Comment"),
 	RATE("Rate");
 

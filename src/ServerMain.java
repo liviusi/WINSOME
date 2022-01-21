@@ -641,6 +641,118 @@ public class ServerMain
 							}
 						}
 					}
+					else if (elem.getAsString().equals(CommandCode.DELETEPOST.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("postid");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								if (loggedInClients.get(client).equals(username))
+								{
+									boolean result = false;
+									try { result = posts.handleDeletePost(username, Integer.parseInt(elem.getAsString())); }
+									catch (NumberFormatException e)
+									{
+										exceptionCaught = true;
+										syntaxErrorHandler(answerConstructor);
+									}
+									catch (NoSuchPostException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										if (result)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Post has now been deleted.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										else
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Post could not be deleted.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+								}
+								else invalidUsernameHandler(answerConstructor, username);
+							}
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.REWIN.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							elem = jsonMessage.get("postid");
+							if (elem == null) syntaxErrorHandler(answerConstructor);
+							else
+							{
+								if (loggedInClients.get(client).equals(username))
+								{
+									boolean result = false;
+									try { result = posts.handleRewin(username, users, Integer.parseInt(elem.getAsString())); }
+									catch (NumberFormatException e)
+									{
+										exceptionCaught = true;
+										syntaxErrorHandler(answerConstructor);
+									}
+									catch (NoSuchPostException e)
+									{
+										exceptionCaught = true;
+										try
+										{
+											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+										}
+										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+									}
+									if (!exceptionCaught)
+									{
+										if (result)
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Post has now been rewon.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+										else
+										{
+											try
+											{
+												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write("Post could not be rewon.".getBytes(StandardCharsets.US_ASCII));
+											}
+											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+										}
+									}
+								}
+								else invalidUsernameHandler(answerConstructor, username);
+							}
+						}
+					}
 
 					else syntaxErrorHandler(answerConstructor);
 				/**

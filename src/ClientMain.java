@@ -129,6 +129,8 @@ public class ClientMain
 	private static final String CREATE_POST_STRING = "post";
 	private static final String SHOW_FEED_STRING = "show feed";
 	private static final String SHOW_POST_STRING = "show post";
+	private static final String DELETE_POST_STRING = "delete";
+	private static final String REWIN_STRING = "rewin";
 	// private static final String COMMENT_STRING = "comment";
 	// private static final String RATE_STRING = "rate";
 
@@ -532,11 +534,8 @@ public class ClientMain
 					System.err.println(SERVER_DISCONNECT);
 					break;
 				}
-				if (result == 0)
-				{
-					System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
-					continue;
-				}
+				if (result == 0) System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
+				continue;
 			}
 			if (command[0].equals(CREATE_POST_STRING))
 			{
@@ -562,11 +561,8 @@ public class ClientMain
 					System.err.println(SERVER_DISCONNECT);
 					break;
 				}
-				if (result == 0)
-				{
-					System.out.println("< New post created: ID " + sb.toString());
-					continue;
-				}
+				if (result == 0) System.out.println("< New post created: ID " + sb.toString());
+				continue;
 			}
 			if (String.format("%s %s", command[0], command[1]).equals(SHOW_POST_STRING))
 			{
@@ -605,6 +601,69 @@ public class ClientMain
 					for (Post.Comment c : p.comments)
 						System.out.printf("%s:\n\"%s\"\n", c.author, c.contents);
 				}
+				continue;
+			}
+			if (command[0].equals(DELETE_POST_STRING))
+			{
+				if (command.length != 2)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				try { result = Command.deletePost(loggedInUsername, Integer.parseInt(command[1]), client, true); }
+				catch (NumberFormatException e)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				catch (NullPointerException e)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				if (result == 0) System.out.println("< Post has now been deleted.");
+				continue;
+			}
+			if (command[0].equals(REWIN_STRING))
+			{
+				if (command.length != 2)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				try { result = Command.rewinPost(loggedInUsername, Integer.parseInt(command[1]), client, true); }
+				catch (NumberFormatException e)
+				{
+					System.err.println(INVALID_SYNTAX);
+					continue;
+				}
+				catch (NullPointerException e)
+				{
+					System.err.println(NOT_LOGGED_IN);
+					continue;
+				}
+				catch (IOException e)
+				{
+					e.printStackTrace();
+					break;
+				}
+				if (result == -1)
+				{
+					System.err.println(SERVER_DISCONNECT);
+					break;
+				}
+				if (result == 0) System.out.println("< Post has now been rewon.");
+				continue;
 			}
 			/**
 			if (command[0].equals(COMMENT_STRING))
