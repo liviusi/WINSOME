@@ -129,13 +129,14 @@ public class User
 	 * @throws NullPointerException if u is null.
 	 */
 	public boolean follow(User u)
-	throws NullPointerException
+	throws SameUserException, NullPointerException
 	{
 		Objects.requireNonNull(u, "User cannot be null");
+
+		if (u.equals(this)) throw new SameUserException("A user cannot follow themselves.");
 		boolean result = false;
 		synchronized(this)
 		{
-			if (u.equals(this)) return false;
 			result = following.add(u.username);
 		}
 		return result;
