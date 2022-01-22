@@ -19,6 +19,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 import api.Command;
+import api.Colors;
 import client.RMIFollowersSet;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
@@ -132,10 +133,11 @@ public class ClientMain
 
 	/** ERROR MESSAGES */
 
-	private static final String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
-	private static final String NOT_LOGGED_IN = "Client has yet to login.";
-	private static final String INVALID_SYNTAX = "Invalid syntax. Type \"help\" to find out which commands are available.";
-	private static final String FATAL_IO = "Fatal I/O error occurred, now aborting...";
+	private static final String SERVER_DISCONNECT = Colors.ANSI_RED + "Server has forcibly reset the connection." + Colors.ANSI_RESET;
+	private static final String NOT_LOGGED_IN = Colors.ANSI_YELLOW + "Client has yet to login." + Colors.ANSI_RESET;
+	private static final String INVALID_SYNTAX = Colors.ANSI_YELLOW + "Invalid syntax. Type \"help\" to find out which commands are available." + Colors.ANSI_RESET;
+	private static final String FATAL_IO = Colors.ANSI_RED + "Fatal I/O error occurred, now aborting..." + Colors.ANSI_RESET;
+
 
 	/** COMMANDS */
 
@@ -174,26 +176,29 @@ public class ClientMain
 
 		if (args.length >= 1)
 		{
-			System.err.println("Usage: java -cp \".:./bin/:./libs/gson-2.8.6.jar\" ClientMain <path/to/config>");
+			System.err.println("Usage: java -cp \".:./bin/:./libs/gson-2.8.6.jar\" ClientMain [<path/to/config>]");
 			System.exit(1);
 		}
+		System.out.printf("LEGEND:\n\t%sCOLOR USED FOR FATAL ERRORS%s\n\t%sCOLOR USED FOR WARNINGS%s\n\t%sCOLOR USED FOR INFO MESSAGES%s\n\t%sCOLOR USED TO PRETTY PRINT OUTPUTS%s\n",
+					Colors.ANSI_RED, Colors.ANSI_RESET, Colors.ANSI_YELLOW, Colors.ANSI_RESET, Colors.ANSI_CYAN, Colors.ANSI_RESET, Colors.ANSI_GREEN, Colors.ANSI_RESET);
 		if (args.length == 0)
 		{
 			configFilename = "./configs/client.txt";
-			System.out.printf("No config files have been provided. Default will be used: %s.\n", configFilename);
+			System.out.printf("%sNo config files have been provided. Default will be used: %s%s.\n", Colors.ANSI_YELLOW, configFilename, Colors.ANSI_RESET);
 		}
 		else configFilename = args[0];
 
 		try { configuration = new Configuration(new File(configFilename)); }
 		catch (NullPointerException | IOException | InvalidConfigException  e)
 		{
-			System.err.println("Fatal error occurred while parsing configuration: now aborting...");
+			System.err.println(Colors.ANSI_RED + "Fatal error occurred while parsing configuration: now aborting..." + Colors.ANSI_RESET);
+			e.printStackTrace();
 			System.exit(1);
 		}
 		try
 		{
 			channel = SocketChannel.open(new InetSocketAddress(configuration.serverAddress, configuration.portNoTCP));
-			System.out.println("Connected to server successfully!");
+			System.out.println(Colors.ANSI_CYAN + "Connected to server successfully!" + Colors.ANSI_RESET);
 		}
 		catch (IOException e)
 		{
@@ -208,11 +213,11 @@ public class ClientMain
 		}
 		catch (RemoteException | NotBoundException e)
 		{
-			System.err.println("Fatal error occurred while setting up RMI callbacks.");
+			System.err.println(Colors.ANSI_RED + "Fatal error occurred while setting up RMI callbacks." + Colors.ANSI_RESET);
 			e.printStackTrace();
 			System.exit(1);
 		}
-		System.out.println("Client is now running...");
+		System.out.println(Colors.ANSI_CYAN + "Client is now running..." + Colors.ANSI_RESET);
 
 		// Local variables are to be (re-)defined as final to be handled in shutdown hook
 		final Scanner scanner = new Scanner(System.in);
@@ -227,7 +232,7 @@ public class ClientMain
 		{
 			public void run()
 			{
-				System.out.println("Client is now freeing resources...");
+				System.out.println(Colors.ANSI_CYAN + "Client is now freeing resources..." + Colors.ANSI_RESET);
 				try
 				{
 					callbackHandler.unregisterForCallback(callbackObjectHandler);
@@ -282,7 +287,7 @@ public class ClientMain
 							System.exit(0);
 						
 						case 0:
-							System.out.println("< " + loggedInUsername + " has now logged out.");
+							System.out.println("< " + Colors.ANSI_GREEN + loggedInUsername + " has now logged out." + Colors.ANSI_RESET);
 							loggedInUsername = null;
 							try
 							{
@@ -291,7 +296,8 @@ public class ClientMain
 							}
 							catch (RemoteException e)
 							{
-								System.err.println("Fatal error occurred while cleaning up previously allocated resources.");
+								System.err.println(Colors.ANSI_RED + "Fatal error occurred while cleaning up previously allocated resources." + Colors.ANSI_RESET);
+								e.printStackTrace();
 								System.exit(1);
 							}
 							callbackObject = null;
@@ -319,15 +325,21 @@ public class ClientMain
 							System.exit(0);
 						
 						case 0:
-							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " does not share interests with any user.");
+							if (destSet.isEmpty()) System.out.println("< " + Colors.ANSI_GREEN + loggedInUsername + " does not share interests with any user." + Colors.ANSI_RESET);
 							else
 							{
-								System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+								System.out.println(String.format("< | %s%30s%s | %s%25s%s |", Colors.ANSI_GREEN, "USERNAME", Colors.ANSI_RESET, Colors.ANSI_GREEN, "TAGS", Colors.ANSI_RESET));
 								System.out.println("< -------------------------------------------------------------------------------");
 								for (String u: destSet)
 								{
 									User tmp = User.fromJSON(u);
-									System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+									StringBuilder sb = new StringBuilder();
+									for (int i = 0; i < tmp.tags.length; i++)
+									{
+										sb.append(Colors.ANSI_GREEN + tmp.tags[i] + Colors.ANSI_RESET);
+										if (i != tmp.tags.length - 1) sb.append(",");
+									}
+									System.out.println(String.format("< | %s%30s%s | %s%25s%s |", Colors.ANSI_GREEN, tmp.username, Colors.ANSI_RESET, Colors.ANSI_GREEN, sb.toString(), Colors.ANSI_RESET));
 								}
 							}
 					}
@@ -340,16 +352,19 @@ public class ClientMain
 						System.err.println(NOT_LOGGED_IN);
 						continue loop;
 					}
-					if (destSet.isEmpty()) System.out.println(loggedInUsername + " is not followed by any user.");
-					else
+					if (destSet.isEmpty()) System.out.println("< " + Colors.ANSI_GREEN + loggedInUsername + " is not followed by any user." + Colors.ANSI_RESET);
+					System.out.println(String.format("< | %s%30s%s | %s%25s%s |", Colors.ANSI_GREEN, "USERNAME", Colors.ANSI_RESET, Colors.ANSI_GREEN, "TAGS", Colors.ANSI_RESET));
+					System.out.println("< -------------------------------------------------------------------------------");
+					for (String u: destSet)
 					{
-						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
-						System.out.println("< -------------------------------------------------------------------------------");
-						for (String u: destSet)
+						User tmp = User.fromJSON(u);
+						StringBuilder sb = new StringBuilder();
+						for (int i = 0; i < tmp.tags.length; i++)
 						{
-							User tmp = User.fromJSON(u);
-							System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+							sb.append(Colors.ANSI_GREEN + tmp.tags[i] + Colors.ANSI_RESET);
+							if (i != tmp.tags.length - 1) sb.append(",");
 						}
+						System.out.println(String.format("< | %s%30s%s | %s%25s%s |", Colors.ANSI_GREEN, tmp.username, Colors.ANSI_RESET, Colors.ANSI_GREEN, sb.toString(), Colors.ANSI_RESET));
 					}
 					continue loop;
 
@@ -376,12 +391,18 @@ public class ClientMain
 							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start following any user.");
 						else
 						{
-							System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+							System.out.println(String.format("< | %s%50s%s | %s%35s%s |", Colors.ANSI_GREEN, "USERNAME", Colors.ANSI_RESET, Colors.ANSI_GREEN, "TAGS", Colors.ANSI_RESET));
 							System.out.println("< -------------------------------------------------------------------------------");
 							for (String u: destSet)
 							{
 								User tmp = User.fromJSON(u);
-								System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+								StringBuilder sb = new StringBuilder();
+								for (int i = 0; i < tmp.tags.length; i++)
+								{
+									sb.append(Colors.ANSI_GREEN + tmp.tags[i] + Colors.ANSI_RESET);
+									if (i != tmp.tags.length - 1) sb.append(",");
+								}
+								System.out.println(String.format("< | %s%50s%s | %s%35s%s |", Colors.ANSI_GREEN, tmp.username, Colors.ANSI_RESET, Colors.ANSI_GREEN, sb.toString(), Colors.ANSI_RESET));
 							}
 						}
 					}
@@ -407,15 +428,17 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start posting.");
+							if (destSet.isEmpty()) System.out.println("< " + Colors.ANSI_GREEN + loggedInUsername + " has yet to start posting." + Colors.ANSI_RESET);
 							else
 							{
-								System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
-								System.out.println("< --------------------------------------------------------------------------");
+								System.out.println(String.format("< | %s%10s%s | %s%25s%s | %s%35s%s |", Colors.ANSI_GREEN, "ID", Colors.ANSI_RESET,
+											Colors.ANSI_GREEN, "AUTHOR", Colors.ANSI_RESET, Colors.ANSI_GREEN, "TITLE", Colors.ANSI_RESET));
+								System.out.println("< ---------------------------------------------------------------------------------");
 								for (String p: destSet)
 								{
 									PostPreview tmp = PostPreview.fromJSON(p);
-									System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+									System.out.println(String.format("< | %s%10s%s | %s%25s%s | %s%35s%s |", Colors.ANSI_GREEN, tmp.id, Colors.ANSI_RESET, Colors.ANSI_GREEN, tmp.author,
+												Colors.ANSI_RESET, Colors.ANSI_GREEN, tmp.title, Colors.ANSI_RESET));
 								}
 							}
 					}
@@ -441,15 +464,17 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							if (destSet.isEmpty()) System.out.println("< The users " + loggedInUsername + " is following have yet to start posting.");
+							if (destSet.isEmpty()) System.out.println("< " + Colors.ANSI_GREEN + "The users " + loggedInUsername + " is following have yet to start posting." + Colors.ANSI_RESET);
 							else
 							{
-								System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
-								System.out.println("< --------------------------------------------------------------------------");
+								System.out.println(String.format("< | %s%10s%s | %s%25s%s | %s%35s%s |", Colors.ANSI_GREEN, "ID", Colors.ANSI_RESET,
+											Colors.ANSI_GREEN, "AUTHOR", Colors.ANSI_RESET, Colors.ANSI_GREEN, "TITLE", Colors.ANSI_RESET));
+								System.out.println("< ---------------------------------------------------------------------------------");
 								for (String p: destSet)
 								{
 									PostPreview tmp = PostPreview.fromJSON(p);
-									System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+									System.out.println(String.format("< | %s%10s%s | %s%25s%s | %s%35s%s |", Colors.ANSI_GREEN, tmp.id, Colors.ANSI_RESET, Colors.ANSI_GREEN, tmp.author,
+												Colors.ANSI_RESET, Colors.ANSI_GREEN, tmp.title, Colors.ANSI_RESET));
 								}
 							}
 					}
@@ -486,15 +511,15 @@ public class ClientMain
 									tmp = Transaction.fromJSON(t);
 									if (flag)
 									{
-										System.out.println(String.format("< %30s %25s %10s", "AMOUNT", "|", "TIMESTAMP"));
+										System.out.println(String.format("< | %s%30s%s %25s %s%15s%s |", Colors.ANSI_GREEN, "AMOUNT", Colors.ANSI_RESET, "|", Colors.ANSI_GREEN, "TIMESTAMP", Colors.ANSI_RESET));
 										System.out.println("< -------------------------------------------------------------------------------");
 									}
 									flag = false;
-									System.out.println(String.format("< %30s %25s %10s", tmp.amount, "|", tmp.timestamp));
+									System.out.println(String.format("< | %s%30s%s %25s %s%15s%s |", Colors.ANSI_GREEN, tmp.amount, Colors.ANSI_RESET, "|", Colors.ANSI_GREEN, tmp.timestamp, Colors.ANSI_RESET));
 								}
 								catch (JsonSyntaxException e) { total = Double.parseDouble(t); }
 							}
-							System.out.printf("< TOTAL: %f WINCOINS\n", total);
+							System.out.printf("< TOTAL: %s%f WINCOINS%s\n", Colors.ANSI_GREEN, total, Colors.ANSI_RESET);
 						}
 					}
 					continue loop;
@@ -519,7 +544,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.printf("< %s BTC\n", destStringBuilder.toString());
+							System.out.printf("< %sWallet value corresponds to %s BTC%s\n", Colors.ANSI_GREEN, destStringBuilder.toString(), Colors.ANSI_RESET);
 					}
 					continue loop;
 				
@@ -542,7 +567,7 @@ public class ClientMain
 					}
 					if (loggedInUsername != null)
 					{
-						System.err.println("A new user cannot be registered before logging out.");
+						System.err.println(Colors.ANSI_YELLOW + "A new user cannot be registered before logging out." + Colors.ANSI_RESET);
 						continue loop;
 					}
 					Set<String> tags = new HashSet<>();
@@ -550,20 +575,21 @@ public class ClientMain
 					try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
 					catch (RemoteException | NotBoundException e)
 					{
-						System.err.println("Fatal error occurred during registration, now aborting...");
+						System.err.println(Colors.ANSI_RED + "Fatal error occurred during registration, now aborting..." + Colors.ANSI_RESET);
 						e.printStackTrace();
 						System.exit(1);
 					}
 					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
 					{
-						System.err.printf("< Given credentials do not meet the requirements:\n%s\n", e.getMessage());
+						System.err.printf("< %sGiven credentials do not meet the requirements%s:\n%s\n", Colors.ANSI_YELLOW, Colors.ANSI_RESET, e.getMessage());
 						continue loop;
 					}
 					catch (UsernameAlreadyExistsException e)
 					{
-						System.err.println("Username has already been taken.");
+						System.err.println("< " + Colors.ANSI_YELLOW + "Username has already been taken." + Colors.ANSI_RESET);
 						continue loop;
 					}
+					System.out.println("< " + Colors.ANSI_GREEN + "User has been registered successfully." + Colors.ANSI_RESET);
 					continue loop;
 				}
 
@@ -593,7 +619,7 @@ public class ClientMain
 
 						case 0:
 							loggedInUsername = command[1];
-							System.out.println("< " + command[1] + " has now logged in.");
+							System.out.println("< " + Colors.ANSI_GREEN + command[1] + " has now logged in." + Colors.ANSI_RESET);
 							try
 							{
 								callbackObject = new RMIFollowersSet(destSet);
@@ -601,7 +627,7 @@ public class ClientMain
 							}
 							catch (RemoteException e)
 							{
-								System.err.println("Fatal error occurred while setting up RMI callbacks: now aborting...");
+								System.err.println(Colors.ANSI_RED + "Fatal error occurred while setting up RMI callbacks: now aborting..." + Colors.ANSI_RESET);
 								e.printStackTrace();
 								System.exit(1);
 							}
@@ -633,7 +659,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< " + loggedInUsername + " has now started following " + command[1]);
+							System.out.println("< " + Colors.ANSI_GREEN + loggedInUsername + " has now started following " + command[1] + Colors.ANSI_RESET);
 							break;
 					}
 					continue loop;
@@ -663,7 +689,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
+							System.out.println("< "+ Colors.ANSI_GREEN + loggedInUsername + " has now stopped following " + command[1] + Colors.ANSI_RESET);
 							break;
 					}
 					continue loop;
@@ -693,7 +719,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< New post created: ID " + destStringBuilder.toString());
+							System.out.println("< " + Colors.ANSI_GREEN + "New post created: ID " + destStringBuilder.toString() + Colors.ANSI_RESET);
 							break;
 					}
 					continue loop;
@@ -729,11 +755,13 @@ public class ClientMain
 
 						case 0:
 							Post p = Post.fromJSON(destStringBuilder.toString());
-							System.out.printf("< ID: %d\n< Title: %s\n< Contents:\n\t%s\n< Upvotes: %d - Downvotes: %d\n< Rewon by: %d\n\t",
-										p.id, p.title, p.contents, p.upvotes, p.downvotes, p.rewonBy.length);
+							System.out.printf("< %sID%s: %d\n< %sTitle%s: %s\n< %sContents%s:\n\t%s\n< %sUpvotes%s: %d - %sDownvotes%s: %d\n< %sRewon by%s: %d\n\t",
+										Colors.ANSI_GREEN, Colors.ANSI_RESET, p.id, Colors.ANSI_GREEN, Colors.ANSI_RESET, p.title, Colors.ANSI_GREEN, Colors.ANSI_RESET, p.contents, Colors.ANSI_GREEN, Colors.ANSI_RESET,
+										p.upvotes, Colors.ANSI_GREEN, Colors.ANSI_RESET, p.downvotes, Colors.ANSI_GREEN, Colors.ANSI_RESET, p.rewonBy.length);
 							for (String r: p.rewonBy) System.out.printf("%s", r);
-							System.out.printf("\n< Comments: %d\n", p.comments.length);
-							for (Post.Comment c : p.comments) System.out.printf("\t%s:\n\"%s\"\n", c.author, c.contents);
+							if (p.rewonBy.length != 0) System.out.print("\n");
+							System.out.printf("< %sComments%s: %d\n", Colors.ANSI_GREEN, Colors.ANSI_RESET, p.comments.length);
+							for (Post.Comment c : p.comments) System.out.printf("\t%s:\n\t%s\n", c.author, c.contents);
 							break;
 					}
 					continue loop;
@@ -768,7 +796,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< Post has now been deleted.");
+							System.out.println("< "+ Colors.ANSI_GREEN + "Post has now been deleted." + Colors.ANSI_RESET);
 							break;
 					}
 					continue loop;
@@ -803,7 +831,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< Post has now been rewon.");
+							System.out.println("< " + Colors.ANSI_GREEN + "Post has now been rewon." + Colors.ANSI_RESET);
 					}
 					continue loop;
 
@@ -837,7 +865,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< New vote added.");
+							System.out.println("< " + Colors.ANSI_GREEN + "New vote added." + Colors.ANSI_RESET);
 					}
 					continue loop;
 
@@ -871,7 +899,7 @@ public class ClientMain
 							System.exit(0);
 
 						case 0:
-							System.out.println("< New comment added.");
+							System.out.println("< " + Colors.ANSI_GREEN + "New comment added." + Colors.ANSI_RESET);
 					}
 					continue loop;
 

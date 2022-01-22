@@ -137,7 +137,10 @@ TARGETS = run-client run-server build
 .Communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
-.Command: .ServerConfiguration .CommandCode .Communication .ResponseCode .Response
+.Colors:
+	$(JC) $(CP) $(JFLAGS) src/api/Colors.java $(OUTPUTDIR)
+
+.Command: .ServerConfiguration .CommandCode .Communication .ResponseCode .Response .Colors
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
 ClientMain: .Command .RMIFollowersSet .RMICallback

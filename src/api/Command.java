@@ -68,7 +68,7 @@ public class Command
 		byte[] salt = Passwords.generateSalt();
 		String hashedPassword = Passwords.hashPassword(Objects.requireNonNull(password, "Password cannot be null.").getBytes(StandardCharsets.US_ASCII), salt);
 		service.register(Objects.requireNonNull(username, "Username cannot be null."), hashedPassword, Objects.requireNonNull(tags, "Tags cannot be null."), salt);
-		if (verbose) System.out.println(username + " has now signed up.");
+		if (verbose) System.out.println(Colors.ANSI_GREEN + username + " has now signed up." + Colors.ANSI_RESET);
 	}
 
 	/**
@@ -153,7 +153,7 @@ public class Command
 		}
 		else
 		{
-			if (verbose) System.out.printf("< Code: %s", r.code.getDescription());
+			if (verbose) System.out.printf("< %sCode%s: %s%s%s", Colors.ANSI_YELLOW, Colors.ANSI_RESET, Colors.ANSI_YELLOW, r.code.getDescription(), Colors.ANSI_RESET);
 			return 1;
 		}
 	}
@@ -665,8 +665,8 @@ public class Command
 	{
 		if (flag)
 		{
-			System.out.printf("< Code: %s", toPrint.code.getDescription());
-			System.out.println("< "+ toPrint.body);
+			System.out.printf("< %sCode%s: %s%s%s", Colors.ANSI_YELLOW, Colors.ANSI_RESET, Colors.ANSI_YELLOW, toPrint.code.getDescription(), Colors.ANSI_RESET);
+			System.out.println("< " + Colors.ANSI_YELLOW + toPrint.body + Colors.ANSI_RESET);
 		}
 	}
 }
