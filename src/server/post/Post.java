@@ -1,5 +1,6 @@
 package server.post;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,6 +47,25 @@ public abstract class Post
 					throw new InvalidVoteException("Value specified does not correspond to a valid vote.");
 			}
 			return v;
+		}
+	}
+
+	public static class GainAndCurators
+	{
+		public final double gain;
+		private final Set<String> curators;
+
+		public GainAndCurators(double gain, Set<String> curators)
+		{
+			this.curators = curators;
+			this.gain = gain;
+		}
+
+		public Set<String> getCurators()
+		{
+			Set<String> r = new HashSet<>();
+			r.addAll(curators);
+			return r;
 		}
 	}
 
@@ -108,6 +128,8 @@ public abstract class Post
 
 	/** Getter for this post's number of downvotes. */
 	public abstract int getDownvotesNo();
+
+	public abstract GainAndCurators getGainAndCurators();
 
 	/**
 	 * @brief Adds a rewin from given user to this post. This method is thread-safe.

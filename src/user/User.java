@@ -1,9 +1,11 @@
 package user;
 
 import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -25,6 +27,7 @@ public class User
 	private Set<Tag> tags = null;
 	/** Set of the usernames of the users this user is currently following. */
 	private Set<String> following = null;
+	private List<Transaction> transactions = null;
 
 	/** Maximum amount of tags to be accepted. */
 	private static final int MAXIMUM_TAG_SET_SIZE = 5;
@@ -56,6 +59,7 @@ public class User
 		this.saltDecoded = Base64.getEncoder().encodeToString(saltUsed);
 		this.loggedIn = null;
 		this.following = new HashSet<>();
+		this.transactions = new ArrayList<>();
 	}
 
 	/**
@@ -78,6 +82,20 @@ public class User
 		Set<String> res = new HashSet<>();
 		synchronized(this) { res.addAll(following); }
 		return res;
+	}
+
+	public List<Transaction> getTransactions()
+	{
+		List<Transaction> r = new ArrayList<>();
+		synchronized(this) { r.addAll(transactions); }
+		return r;
+	}
+
+	public void addTransaction(Transaction t)
+	throws InvalidAmountException
+	{
+		System.out.println(username + " " + t.amount + " " + t.instant.toString());
+		synchronized(this) { transactions.add(t); }
 	}
 
 	/**

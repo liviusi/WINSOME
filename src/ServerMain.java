@@ -39,6 +39,7 @@ import configuration.ServerConfiguration;
 import server.BackupTask;
 import server.RMICallbackService;
 import server.RMITask;
+import server.RewardsTask;
 import server.post.InvalidCommentException;
 import server.post.InvalidGeneratorException;
 import server.post.InvalidPostException;
@@ -1052,6 +1053,8 @@ public class ServerMain
 		rmi.start();
 		Thread backup = new Thread(new BackupTask(configuration, users, posts));
 		backup.start();
+		Thread rewards = new Thread(new RewardsTask(users, posts));
+		rewards.start();
 
 		// setting up multiplexing:
 		ServerSocketChannel serverSocketChannel = null;
@@ -1083,6 +1086,7 @@ public class ServerMain
 			{
 				System.out.printf("\nServer has now entered shutdown mode.\n");
 				rmi.interrupt();
+				rewards.interrupt();
 				selectorHandler.wakeup();
 				Iterator<SelectionKey> keys = selectorHandler.keys().iterator();
 				while (keys.hasNext())

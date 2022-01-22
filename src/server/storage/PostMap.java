@@ -32,6 +32,7 @@ import server.post.InvalidPostException;
 import server.post.InvalidVoteException;
 import server.post.Post;
 import server.post.RewinPost;
+import server.post.Post.GainAndCurators;
 import server.post.Post.Vote;
 
 /**
@@ -73,6 +74,16 @@ public class PostMap extends Storage implements PostStorage
 		postsToBeBackedUp = new ConcurrentHashMap<>();
 		postsByAuthor = new ConcurrentHashMap<>();
 		flag = false;
+	}
+
+	public Map<String, GainAndCurators> calculateGains()
+	{
+		Map<String, GainAndCurators> map = new HashMap<>();
+
+		for (Post p: postsBackedUp.values())
+			map.put(p.getAuthor(), p.getGainAndCurators());
+
+		return map;
 	}
 
 	public int handleCreatePost(final String author, final String title, final String contents)

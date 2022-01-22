@@ -3,12 +3,14 @@ package server.storage;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
 
 import server.post.InvalidCommentException;
 import server.post.InvalidGeneratorException;
 import server.post.InvalidPostException;
 import server.post.InvalidVoteException;
+import server.post.Post.GainAndCurators;
 import server.post.Post.Vote;
 
 /**
@@ -17,6 +19,8 @@ import server.post.Post.Vote;
  */
 public interface PostStorage
 {
+	public Map<String, GainAndCurators> calculateGains();
+
 	/**
 	 * @brief Handles post creation.
 	 * @param author cannot be null or empty.

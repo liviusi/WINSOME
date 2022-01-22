@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -24,6 +25,7 @@ import com.google.gson.FieldAttributes;
 import com.google.gson.stream.JsonReader;
 
 import cryptography.Passwords;
+import server.post.Post.GainAndCurators;
 import user.*;
 
 /**
@@ -107,25 +109,36 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			.collect(Collectors.toSet());
 	}
 
-	public boolean userIsRegistered(final String username)
+	public void updateRewards(Map<String, GainAndCurators> gains, double authorPercentage)
+	throws InvalidAmountException, NoSuchUserException, NullPointerException
 	{
-		if (usersBackedUp.get(username) == null)
-			if (usersToBeBackedUp.get(username) != null) return true;
-		return false;
-	}
-
-	public String getUserByName(final String username)
-	throws NoSuchUserException, NullPointerException
-	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(gains, "Gains" + NULL_PARAM_ERROR);
+		if (authorPercentage < 0 || authorPercentage > 100) throw new IllegalArgumentException("Author percentage is not a valid percentage.");
 
 		User u = null;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		for (Entry<String, GainAndCurators> entry: gains.entrySet())
+		{
+			final String username = entry.getKey();
+			final double gain = entry.getValue().gain;
+			if (gain == 0) continue;
+			final Set<String> curators = entry.getValue().getCurators();
 
-		return u.toString();
+			u = usersBackedUp.get(username);
+			if (u == null) u = usersToBeBackedUp.get(username);
+			if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
+			u.addTransaction(new Transaction(gain * authorPercentage / 100));
+			for (String s : curators)
+			{
+				u = usersBackedUp.get(s);
+				if (u == null) u = usersToBeBackedUp.get(s);
+				if (u == null) throw new NoSuchUserException(s + NOT_SIGNED_UP);
+
+				u.addTransaction(new Transaction(gain * (100 - authorPercentage) / 100));
+			}
+		}
+
 	}
 
 	public String handleLoginSetup(final String username)
@@ -210,8 +223,8 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		u.getFollowing().forEach(following ->
 			{
-				try { r.add(getUserByName(following)); }
-				catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
+				try { r.add(usersBackedUp.get(following).toString()); }
+				catch (NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
 			}
 		);
 

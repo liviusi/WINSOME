@@ -4,8 +4,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 import java.util.Set;
 
+import server.post.Post.GainAndCurators;
+import user.InvalidAmountException;
 import user.InvalidLoginException;
 import user.InvalidLogoutException;
 import user.SameUserException;
@@ -27,15 +30,8 @@ public interface UserStorage
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException;
 
-	/**
-	 * @brief Checks whether given username belongs to one registered.
-	 * @param username cannot be null.
-	 * @return true on success, false on failure.
-	 */
-	public boolean userIsRegistered(final String username);
-
-	public String getUserByName(final String username)
-	throws NoSuchUserException;
+	public void updateRewards(final Map<String, GainAndCurators> gains, final double authorPercentage)
+	throws InvalidAmountException, NoSuchUserException, NullPointerException;
 
 	/**
 	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt
