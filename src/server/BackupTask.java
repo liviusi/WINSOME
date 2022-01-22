@@ -21,6 +21,7 @@ public class BackupTask implements Runnable
 	private final File usersFile;
 	/** Users' follows backup file */
 	private final File followingFile;
+	private final File transactionsFile = new File("./storage/transactions.json");
 	/** Pointer to user storage */
 	private final UserStorage users;
 
@@ -50,7 +51,6 @@ public class BackupTask implements Runnable
 		this.postsReactionsFile = new File(configuration.postsInteractionsStorageFilename);
 		this.users = users;
 		this.posts = posts;
-
 	}
 
 	public void run()
@@ -63,8 +63,10 @@ public class BackupTask implements Runnable
 			{
 				users.backupUsers(usersFile);
 				users.backupFollowing(followingFile);
+				users.backupTransactions(transactionsFile);
 				posts.backupPostsImmutableData(postsImmutableFile);
 				posts.backupPostsMutableData(postsReactionsFile);
+				users.backupTransactions(transactionsFile);
 			}
 			catch (IOException e)
 			{

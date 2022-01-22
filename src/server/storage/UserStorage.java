@@ -141,4 +141,7 @@ public interface UserStorage
 	 */
 	public void backupFollowing(final File file)
 	throws FileNotFoundException, IOException, NullPointerException;
+
+	public void backupTransactions(File transactionsFile)
+	throws FileNotFoundException, IOException;
 }

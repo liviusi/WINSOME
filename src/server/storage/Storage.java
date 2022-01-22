@@ -13,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.Gson;
@@ -56,10 +57,48 @@ public abstract class Storage
 		}
 	}
 
+	public static <T> void backupNonCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Set<T> data)
+	throws IOException
+	{
+		if (data.isEmpty()) return;
+
+		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(strategy).create();
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		int i = 0;
+
+		fileToBeStoredIn.getParentFile().mkdirs();
+
+		try
+		(
+			final FileOutputStream fos = new FileOutputStream(fileToBeStoredIn, false);
+			final FileChannel c = fos.getChannel()
+		)
+		{
+			writeChar(c, '[');
+			for (Iterator<T> it = data.iterator(); it.hasNext(); i++)
+			{
+				T t = it.next();
+				final byte[] bytes = gson.toJson(t).getBytes();
+				for (int offset = 0; offset < bytes.length; offset += BUFFERSIZE)
+				{
+					buffer.clear();
+					buffer.put(bytes, offset, Math.min(BUFFERSIZE, bytes.length - offset));
+					buffer.flip();
+					while (buffer.hasRemaining()) c.write(buffer);
+				}
+				if (i < data.size() - 1) writeChar(c, ',');
+			}
+			writeChar(c, ']');
+		}
+	}
+
 	public static <K, V> void backupCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Map<K, V> backedUpData,
 			Map<K,V> toBeBackedUpData, boolean firstBackupAndNonEmptyStorage)
 	throws IOException
 	{
+		if (toBeBackedUpData.isEmpty()) return;
+
 		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(strategy).create();
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] data = null;
@@ -69,13 +108,11 @@ public abstract class Storage
 		FileOutputStream fos = null;
 		FileChannel c = null;
 
-		if (toBeBackedUpData.isEmpty()) return;
-
 		// the file is non-empty:
 		// the closing square bracket is to be deleted.
 		if (!(backedUpData.isEmpty()) || firstBackupAndNonEmptyStorage)
 		{
-			File copy = new File("copy-users.json");
+			File copy = new File("copy-map.json");
 			scanner = new Scanner(fileToBeStoredIn);
 			fos = new FileOutputStream(copy);
 			c = fos.getChannel();

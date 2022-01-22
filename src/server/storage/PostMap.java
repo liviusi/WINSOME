@@ -281,9 +281,10 @@ public class PostMap extends Storage implements PostStorage
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
-				// skips everything but "id", "comments", "rewonBy", "upvotedBy" and "downvotedBy" fields specified inside RewinPost class.
+				// skips everything but "id", "comments", "rewonBy", "upvotedBy", "downvotedBy" and "iterations" fields specified inside RewinPost class.
 				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("comments")
-						&& !f.getName().equals("rewonBy") && !f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy");
+						&& !f.getName().equals("rewonBy") && !f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy")
+						&& !f.getName().equals("iterations");
 			}
 
 			public boolean shouldSkipClass(Class<?> clazz)

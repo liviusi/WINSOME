@@ -42,11 +42,13 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	/** Users yet to be stored. */
 	private Map<String, User> usersToBeBackedUp = null;
 	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
-	private boolean flag = false;
+	private boolean usersFirstBackupAndNonEmptyStorage = false;
 	/** Maps a tag to the set of the users currently interested in it. */
 	private Map<Tag, Set<User>> interestsMap = null;
 	/** Maps a user to the set of users currently following it. */
 	private Map<User, Set<User>> followersMap = null;
+
+	private final Object monitor = new Object();
 
 	/** Empty string. */
 	private static final String EMPTY_STRING = "";
@@ -60,7 +62,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	{
 		usersBackedUp = new ConcurrentHashMap<>();
 		usersToBeBackedUp = new ConcurrentHashMap<>();
-		flag = false;
+		usersFirstBackupAndNonEmptyStorage = false;
 		interestsMap = new ConcurrentHashMap<>();
 		followersMap = new ConcurrentHashMap<>();
 	}
@@ -82,16 +84,21 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		emptyStringHashed = Passwords.hashPassword(EMPTY_STRING.getBytes(StandardCharsets.US_ASCII), salt);
 		if (emptyStringHashed.equals(password)) throw new PasswordNotValidException("Password" + EMPTY_ERROR);
 		u = new User(username, password, tags, salt);
-		if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
-			throw new UsernameAlreadyExistsException("Username has already been taken.");
-		usersToBeBackedUp.put(username, u);
-		u.getTags().forEach(t -> 
+
+		synchronized(monitor) // synchronizing over monitor is needed to avoid toctou
 		{
-			Set<User> tmp = new HashSet<>();
-			tmp.add(u);
-			interestsMap.compute(t, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
-		});
-		followersMap.put(u, new HashSet<>());
+			if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
+				throw new UsernameAlreadyExistsException("Username has already been taken.");
+			usersToBeBackedUp.put(username, u);
+			u.getTags().forEach(t -> 
+			{
+				Set<User> tmp = new HashSet<>(); tmp.add(u);
+				Set<User> value = null;
+				if ((value = interestsMap.get(t)) == null) interestsMap.put(t, tmp);
+				else value.add(u);
+			});
+			followersMap.put(u, new HashSet<>());
+		}
 	}
 
 	public Set<String> recoverFollowers(final String username)
@@ -99,11 +106,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 		
 		return followersMap.get(u)
 			.stream()
@@ -119,6 +124,8 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		if (authorPercentage < 0 || authorPercentage > 100) throw new IllegalArgumentException("Author percentage is not a valid percentage.");
 
 		User u = null;
+		Map<User, Set<Transaction>> newTransactions = new HashMap<>();
+		Transaction t = null;
 
 		for (Entry<String, GainAndCurators> entry: gains.entrySet())
 		{
@@ -127,18 +134,34 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			if (gain == 0) continue;
 			final Set<String> curators = entry.getValue().getCurators();
 
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-			if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+			if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 
-			u.addTransaction(new Transaction(gain * authorPercentage / 100));
+			t = new Transaction((gain * authorPercentage) / 100);
+			if (newTransactions.get(u) == null)
+			{
+				Set<Transaction> set = new HashSet<>(); set.add(t);
+				newTransactions.put(u, set);
+			}
+			else newTransactions.get(u).add(t);
+
 			for (String s : curators)
 			{
-				u = usersBackedUp.get(s);
-				if (u == null) u = usersToBeBackedUp.get(s);
-				if (u == null) throw new NoSuchUserException(s + NOT_SIGNED_UP);
+				if ((u = getUserByName(s)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 
-				u.addTransaction(new Transaction(gain * (100 - authorPercentage) / 100));
+				t = new Transaction((gain * (100 - authorPercentage)) / 100);
+				if (newTransactions.get(u) == null)
+				{
+					Set<Transaction> tmpSet = new HashSet<>(); tmpSet.add(t);
+					newTransactions.put(u, tmpSet);
+				}
+				else newTransactions.get(u).add(t);
+			}
+		}
+		synchronized(monitor)
+		{
+			for (Entry<User, Set<Transaction>> entry: newTransactions.entrySet())
+			{
+				for (Transaction v: entry.getValue()) entry.getKey().addTransaction(v);
 			}
 		}
 
@@ -149,15 +172,11 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
-		String saltDecoded = null;
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-		saltDecoded = u.saltDecoded;
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 
-		return saltDecoded;
+		return u.saltDecoded;
 	}
 
 	public void handleLogin(final String username, final SocketChannel clientID, final String hashPassword)
@@ -167,11 +186,10 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(clientID, "Client ID" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(hashPassword, "Hashed password" + NULL_PARAM_ERROR);
 
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
 		u.login(clientID, hashPassword);
 	}
 
@@ -181,11 +199,10 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(clientID, "Client ID" + NULL_PARAM_ERROR);
 
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
 		u.logout(clientID);
 	}
 
@@ -195,11 +212,10 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
 		Set<String> r = new HashSet<>();
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
 		u.getTags().forEach(t ->
 			interestsMap.get(t).forEach(tUser ->
 			{
@@ -219,11 +235,10 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
 		Set<String> r = new HashSet<>();
-		User u = null;
+		final User u;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
 		u.getFollowing().forEach(following ->
 			{
 				try { r.add(usersBackedUp.get(following).toString()); }
@@ -242,16 +257,13 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
 
 		final String NO_USER_ERROR = "No user could be found for given name: ";
-		User followerUser = null;
-		User followedUser = null;
+		final User followerUser;
+		final User followedUser;
 		boolean result = false;
 
-		followerUser = usersBackedUp.get(followerUsername);
-		followedUser = usersBackedUp.get(followedUsername);
-		if (followerUser == null)
-			throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
-		if (followedUser == null)
-			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+		if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
+		if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+
 		result = followerUser.follow(followedUser);
 		if (result)
 		{
@@ -271,15 +283,12 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 
 		final String NO_USER_ERROR = "No user could be found for given name: ";
 		final User followerUser;
-		User followedUser = null;
+		final User followedUser;
 		boolean result = false;
 
-		followerUser = usersBackedUp.get(followerUsername);
-		followedUser = usersBackedUp.get(followedUsername);
-		if (followerUser == null)
-			throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
-		if (followedUser == null)
-			throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+		if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
+		if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
+
 		result = followerUser.unfollow(followedUser);
 		if (result)
 			followersMap.compute(followedUser, (k, v) -> v.stream().filter(user -> !user.equals(followerUser)).collect(Collectors.toSet()));
@@ -293,16 +302,14 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
 		Set<String> r = new HashSet<>();
-		User u = null;
+		final User u;
 		List<Transaction> transactions = null;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 
 		transactions = u.getTransactions();
 		r.add(Double.toString(transactions.stream().mapToDouble(t -> t.amount).sum()) + "\r\n");
-		for (Transaction t: transactions) r.add(t.toFormattedString());
+		for (Transaction t: transactions) r.add(t.toString());
 
 		return r;
 	}
@@ -312,12 +319,10 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
-		User u = null;
+		final User u;
 		double rate = -1;
 
-		u = usersBackedUp.get(username);
-		if (u == null) u = usersToBeBackedUp.get(username);
-		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 
 		double wallet = u.getTransactions().stream().mapToDouble(t -> t.amount).sum();
 
@@ -333,14 +338,21 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	public void backupUsers(final File usersFile)
 	throws FileNotFoundException, IOException
 	{
-		Map<String, User> tmp = new HashMap<>(usersToBeBackedUp);
-		usersToBeBackedUp = new ConcurrentHashMap<>();
+		Map<String, User> tmp = null;
+		boolean flag = true;
+		synchronized(monitor)
+		{
+			tmp = new HashMap<>(usersToBeBackedUp);
+			usersToBeBackedUp = new ConcurrentHashMap<>();
+			flag = usersFirstBackupAndNonEmptyStorage;
+			usersFirstBackupAndNonEmptyStorage = false;
+		}
 		backupCached(new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
 				// skips "following" field specified inside User class.
-				return f.getDeclaringClass() == User.class && f.getName().equals("following");
+				return f.getDeclaringClass() == User.class && (f.getName().equals("following") || f.getName().equals("transactions"));
 			}
 
 			public boolean shouldSkipClass(Class<?> clazz)
@@ -348,7 +360,6 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 				return false;
 			}
 		}, usersFile, usersBackedUp, tmp, flag);
-		flag = false;
 	}
 
 	public void backupFollowing(File followingFile)
@@ -368,7 +379,31 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 				return false;
 			}
 		}, followingFile, usersBackedUp);
+	}
 
+	public void backupTransactions(File transactionsFile)
+	throws FileNotFoundException, IOException
+	{
+		Set<User> tmp = new HashSet<>();
+		synchronized(monitor)
+		{
+			usersBackedUp.values().forEach(u -> tmp.add(u));
+		}
+
+		backupNonCached(new ExclusionStrategy()
+		{
+			public boolean shouldSkipField(FieldAttributes f)
+			{
+				// skips everything except username and transactions field
+				return f.getDeclaringClass() == User.class && !f.getName().equals("transactions") &&
+						!f.getName().equals("username");
+			}
+			
+			public boolean shouldSkipClass(Class<?> clazz)
+			{
+				return false;
+			}
+		}, transactionsFile, tmp);
 	}
 
 	/**
@@ -388,7 +423,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
 
 		UserMap map = new UserMap();
-		map.flag = true;
+		map.usersFirstBackupAndNonEmptyStorage = true;
 
 		InputStream is = new FileInputStream(usersFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
@@ -506,5 +541,16 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			}
 		}
 		return map;
+	}
+
+	private User getUserByName(final String username)
+	{
+		User u = null;
+		synchronized(monitor)
+		{
+			u = usersBackedUp.get(username);
+			if (u == null) u = usersToBeBackedUp.get(username);
+		}
+		return u;
 	}
 }

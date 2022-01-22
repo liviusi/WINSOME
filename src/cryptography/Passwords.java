@@ -42,13 +42,13 @@ public class Passwords
 		return salt;
 	}
 
-	public static byte[] decodeSalt(final String saltDecoded)
+	public static byte[] decodeSalt(final String saltEncoded)
 	{
-		return Base64.getDecoder().decode(saltDecoded);
+		return Base64.getDecoder().decode(saltEncoded);
 	}
 
-	public static String encodeSalt(final byte[] saltEncoded)
+	public static String encodeSalt(final byte[] saltDecoded)
 	{
-		return Base64.getEncoder().encodeToString(saltEncoded);
+		return Base64.getEncoder().encodeToString(saltDecoded);
 	}
 }

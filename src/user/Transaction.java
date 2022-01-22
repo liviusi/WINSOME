@@ -10,26 +10,21 @@ import com.google.gson.Gson;
 public class Transaction
 {
 	public final double amount;
-	public final Instant instant;
+	public final String timestamp;
 
 	private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM. YYYY - HH:mm:ss").withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault());
 
-	public Transaction(double amount)
+	public Transaction(final double amount)
 	throws InvalidAmountException
 	{
 		if (amount <= 0) throw new InvalidAmountException("Negative transactions are not supported.");
 		this.amount = amount;
-		instant = Instant.now();
+		this.timestamp = FORMATTER.format(Instant.now());
 	}
 
 	public String toString()
 	{
-		return String.format("{ \"amount\": \"%f\", \"time\":  \"%s\" }", amount, instant.toString());
-	}
-
-	public String toFormattedString()
-	{
-		return String.format("{ \"amount\": \"%f\", \"timestamp\":  \"%s\" }", amount, FORMATTER.format(instant));
+		return String.format("{ \"amount\": \"%f\", \"timestamp\":  \"%s\" }", amount, timestamp);
 	}
 
 	public static Transaction fromJSON(String jsonString)
