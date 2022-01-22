@@ -855,6 +855,75 @@ public class ServerMain
 							}
 						}
 					}
+					else if (elem.getAsString().equals(CommandCode.WALLET.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								Set<String> result = null;
+								try { result = users.handleGetWallet(username); }
+								catch (NoSuchUserException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										size = SetToByteArray(result, answerConstructor);
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
+					else if (elem.getAsString().equals(CommandCode.WALLETBTC.description))
+					{
+						elem = jsonMessage.get("username");
+						if (elem == null) syntaxErrorHandler(answerConstructor);
+						else
+						{
+							username = elem.getAsString();
+							if (loggedInClients.get(client).equals(username))
+							{
+								String result = null;
+								try { result = users.handleGetWalletInBitcoin(username); }
+								catch (NoSuchUserException e)
+								{
+									exceptionCaught = true;
+									try
+									{
+										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+								catch (IOException | NumberFormatException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								if (!exceptionCaught)
+								{
+									try
+									{
+										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write(result.getBytes(StandardCharsets.US_ASCII));
+									}
+									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+								}
+							}
+							else invalidUsernameHandler(answerConstructor, username);
+						}
+					}
 					else syntaxErrorHandler(answerConstructor);
 
 					putByteArray(buffer, size, answerConstructor.toByteArray());
@@ -1111,6 +1180,8 @@ public class ServerMain
 				try { backup.join(500); }
 				catch (InterruptedException e) { }
 				try { rmi.join(500); }
+				catch (InterruptedException e) { }
+				try { rewards.join(500); }
 				catch (InterruptedException e) { }
 			}
 		});

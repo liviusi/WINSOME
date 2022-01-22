@@ -16,6 +16,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 
 import api.Command;
 import client.RMIFollowersSet;
@@ -112,29 +113,53 @@ public class ClientMain
 		}
 	}
 
-	private static final String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
-	private static final String LOGIN_SUCCESS = " has now logged in.";
-	private static final String NOT_LOGGED_IN = "Client has yet to login";
-	private static final String INVALID_SYNTAX = "Invalid syntax. Type \"help\" to find out which commands are available.";
+	private static class Transaction
+	{
+		public final double amount;
+		public final String timestamp;
 
-	private static final String QUIT_STRING = ":q!";
-	private static final String HELP_STRING = "help";
-	private static final String REGISTER_STRING = "register";
-	private static final String LOGIN_STRING = "login";
-	private static final String LOGOUT_STRING = "logout";
-	private static final String LIST_USERS_STRING = "list users";
-	private static final String LIST_FOLLOWERS_STRING = "list followers";
-	private static final String LIST_FOLLOWING_STRING = "list following";
-	private static final String FOLLOW_USER_STRING = "follow";
-	private static final String UNFOLLOW_USER_STRING = "unfollow";
-	private static final String BLOG_STRING = "blog";
-	private static final String CREATE_POST_STRING = "post";
-	private static final String SHOW_FEED_STRING = "show feed";
-	private static final String SHOW_POST_STRING = "show post";
-	private static final String DELETE_POST_STRING = "delete";
-	private static final String REWIN_STRING = "rewin";
-	private static final String RATE_STRING = "rate";
-	private static final String COMMENT_STRING = "comment";
+		private Transaction(final double amount, final String timestamp)
+		{
+			this.amount = amount;
+			this.timestamp = timestamp;
+		}
+
+		public static Transaction fromJSON(String jsonString)
+		{
+			return gson.fromJson(jsonString, Transaction.class);
+		}
+	}
+
+	/** ERROR MESSAGES */
+
+	private static final String SERVER_DISCONNECT = "Server has forcibly reset the connection.";
+	private static final String NOT_LOGGED_IN = "Client has yet to login.";
+	private static final String INVALID_SYNTAX = "Invalid syntax. Type \"help\" to find out which commands are available.";
+	private static final String FATAL_IO = "Fatal I/O error occurred, now aborting...";
+
+	/** COMMANDS */
+
+	private static final String QUIT = ":q!";
+	private static final String SHOW = "show";
+	private static final String HELP = "help";
+	private static final String REGISTER = "register";
+	private static final String LOGIN = "login";
+	private static final String LOGOUT = "logout";
+	private static final String LIST_USERS = "list users";
+	private static final String LIST_FOLLOWERS = "list followers";
+	private static final String LIST_FOLLOWING = "list following";
+	private static final String FOLLOW = "follow";
+	private static final String UNFOLLOW = "unfollow";
+	private static final String BLOG = "blog";
+	private static final String POST = "post";
+	private static final String SHOW_FEED = "show feed";
+	private static final String SHOW_POST = "show post";
+	private static final String DELETE = "delete";
+	private static final String REWIN = "rewin";
+	private static final String RATE = "rate";
+	private static final String COMMENT = "comment";
+	private static final String WALLET = "wallet";
+	private static final String WALLET_BTC = "wallet btc";
 
 	private static final Gson gson = new Gson();
 
@@ -143,7 +168,7 @@ public class ClientMain
 	{
 		String configFilename = null;
 		Configuration configuration = null;
-		SocketChannel client = null;
+		SocketChannel channel = null;
 		RMICallback callback = null;
 		RMIFollowersSet callbackObject = null;
 
@@ -163,17 +188,17 @@ public class ClientMain
 		catch (NullPointerException | IOException | InvalidConfigException  e)
 		{
 			System.err.println("Fatal error occurred while parsing configuration: now aborting...");
-			e.printStackTrace();
 			System.exit(1);
 		}
 		try
 		{
-			client = SocketChannel.open(new InetSocketAddress(configuration.serverAddress, configuration.portNoTCP));
+			channel = SocketChannel.open(new InetSocketAddress(configuration.serverAddress, configuration.portNoTCP));
 			System.out.println("Connected to server successfully!");
 		}
 		catch (IOException e)
 		{
-			System.err.printf("I/O error occurred:\n%s\n", e.getMessage());
+			System.err.println(FATAL_IO);
+			e.printStackTrace();
 			System.exit(1);
 		}
 		try
@@ -189,555 +214,673 @@ public class ClientMain
 		}
 		System.out.println("Client is now running...");
 
-		Scanner scanner = new Scanner(System.in);
+		// Local variables are to be (re-)defined as final to be handled in shutdown hook
+		final Scanner scanner = new Scanner(System.in);
+		final RMICallback callbackHandler = callback;
+		final RMIFollowersSet callbackObjectHandler = callbackObject;
+		final SocketChannel channelHandler = channel;
+
 		String loggedInUsername = null;
-		boolean loggedIn = false;
-		Set<String> resultSet = null;
 		int result = -1;
 
-		while(true)
+		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
 		{
-			if (!loggedIn) System.out.printf("> ");
-			else System.out.printf("%s> ", loggedInUsername);
-			String s = scanner.nextLine();
-			if (s.equalsIgnoreCase(QUIT_STRING)) break;
-			if (s.equalsIgnoreCase(HELP_STRING))
+			public void run()
 			{
-				System.out.printf("register <username> <password> <tags>:\n\tRegister.\n");
-				continue;
-			}
-			if (s.equals(LIST_USERS_STRING))
-			{
-				resultSet = new HashSet<>();
-				try { result = Command.listUsers(loggedInUsername, client, true, resultSet); }
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				else if (result == 0)
-				{
-					if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " does not share interests with any user.");
-					else
-					{
-						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
-						System.out.println("< -------------------------------------------------------------------------------");
-						for (String u: resultSet)
-						{
-							User tmp = User.fromJSON(u);
-							System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
-						}
-					}
-					continue;
-				}
-			}
-			if (s.equals(LIST_FOLLOWERS_STRING))
-			{
-				try { resultSet = callbackObject.recoverFollowers(); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-
-				if (resultSet.isEmpty()) System.out.println(loggedInUsername + " is not followed by any user.");
-				else
-				{
-					System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
-					System.out.println("< -------------------------------------------------------------------------------");
-					for (String u: resultSet)
-					{
-						User tmp = User.fromJSON(u);
-						System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
-					}
-				}
-				continue;
-			}
-			if (s.equals(LIST_FOLLOWING_STRING))
-			{
-				resultSet = new HashSet<>();
-				try { result = Command.listFollowing(loggedInUsername, client, true, resultSet); }
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				else if (result == 0)
-				{
-					if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start following any user.");
-					else
-					{
-						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
-						System.out.println("< -------------------------------------------------------------------------------");
-						for (String u: resultSet)
-						{
-							User tmp = User.fromJSON(u);
-							System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
-						}
-					}
-					continue;
-				}
-			}
-			if (s.equals(LOGOUT_STRING))
-			{
+				System.out.println("Client is now freeing resources...");
 				try
 				{
-					result = Command.logout(loggedInUsername, client, true);
+					callbackHandler.unregisterForCallback(callbackObjectHandler);
+					UnicastRemoteObject.unexportObject(callbackObjectHandler, true);
 				}
-				catch (NullPointerException e)
-				{
-					if (loggedInUsername == null)
-						System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					System.out.println("< " + loggedInUsername + " has now logged out.");
-					loggedIn = false;
-					loggedInUsername = null;
-					try
-					{
-						callback.unregisterForCallback(callbackObject);
-						UnicastRemoteObject.unexportObject(callbackObject, true);
-					}
-					catch (RemoteException e)
-					{
-						System.err.println("Fatal error occurred while cleaning up previously allocated resources.");
-						e.printStackTrace();
-						System.exit(1);
-					}
-				}
-				continue;
+				catch (RemoteException ignored) { }
+				catch (NullPointerException ignored) { }
+				scanner.close();
+				try { channelHandler.close(); }
+				catch (IOException ignored) { }
 			}
-			if (s.equals(BLOG_STRING))
-			{
-				if (loggedInUsername == null)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				resultSet = new HashSet<>();
-				try { result = Command.viewBlog(loggedInUsername, client, resultSet, true); }
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				else
-				{
-					if (resultSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start posting.");
-					else
-					{
-						System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
-						System.out.println("< --------------------------------------------------------------------------");
-						for (String p: resultSet)
-						{
-							PostPreview tmp = PostPreview.fromJSON(p);
-							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
-						}
-					}
-					continue;
-				}
-			}
-			if (s.equals(SHOW_FEED_STRING))
-			{
-				if (loggedInUsername == null)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				resultSet = new HashSet<>();
-				try { result = Command.showFeed(loggedInUsername, client, resultSet, true); }
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				else
-				{
-					if (resultSet.isEmpty()) System.out.println("< The users " + loggedInUsername + " is following have yet to start posting.");
-					else
-					{
-						System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
-						System.out.println("< --------------------------------------------------------------------------");
-						for (String p: resultSet)
-						{
-							PostPreview tmp = PostPreview.fromJSON(p);
-							System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
-						}
-					}
-					continue;
-				}
-			}
-			String[] command = parseQuotes(s);
-			if (command[0].equals(REGISTER_STRING))
-			{
-				int len = command.length;
-				if (len < 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				Set<String> tags = new HashSet<>();
-				for (int i = 3; i < len; i++)
-					tags.add(command[i]);
-				try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
-				catch (RemoteException | NotBoundException e)
-				{
-					System.err.printf("Exception occurred during registration:\n%s\nNow aborting...\n", e.getMessage());
-					break;
-				}
-				catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
-				{
-					System.err.printf("Given credentials do not meet the requirements:\n%s\n", e.getMessage());
-					continue;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.printf("Exception occurred during registration:\n%s\n", e.getMessage());
-					continue;
-				}
-				catch (UsernameAlreadyExistsException e)
-				{
-					System.err.printf("Username has already been taken.\n");
-					continue;
-				}
-				continue;
-			}
-			if (command[0].equals(LOGIN_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				resultSet = new HashSet<>();
-				try { result = Command.login(command[1], command[2], client, resultSet, true); }
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0 && !loggedIn)
-				{
-					loggedIn = true;
-					loggedInUsername = command[1];
-					System.out.println("< " + command[1] + LOGIN_SUCCESS);
-					try
-					{
-						callbackObject = new RMIFollowersSet(resultSet);
-						callback.registerForCallback(callbackObject, loggedInUsername);
-					}
-					catch (RemoteException e)
-					{
-						System.err.println("Fatal error occurred while setting up RMI callbacks.");
-						e.printStackTrace();
-						System.exit(1);
-					}
-				}
-				continue;
-			}
-			if (command[0].equals(FOLLOW_USER_STRING))
-			{
-				if (command.length != 2)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.followUser(loggedInUsername, command[1], client, true); }
-				catch (NullPointerException e)
-				{
-					if (loggedInUsername == null)
-						System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					System.out.println("< " + loggedInUsername + " has now started following " + command[1]);
-					continue;
-				}
-				continue;
-			}
-			if (command[0].equals(UNFOLLOW_USER_STRING))
-			{
-				if (command.length != 2)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.unfollowUser(loggedInUsername, command[1], client, true); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0) System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
-				continue;
-			}
-			if (command[0].equals(CREATE_POST_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				StringBuilder sb = new StringBuilder();
-				try { result = Command.createPost(loggedInUsername, command[1], command[2], client, true, sb); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0) System.out.println("< New post created: ID " + sb.toString());
-				continue;
-			}
-			if (String.format("%s %s", command[0], command[1]).equals(SHOW_POST_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				StringBuilder sb = new StringBuilder();
-				try { result = Command.showPost(loggedInUsername, Integer.parseInt(command[2]), client, sb, true); }
-				catch (NumberFormatException e)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					Post p = Post.fromJSON(sb.toString());
-					System.out.printf("< ID: %d\n< Title: %s\n< Contents:\n\t%s\n< Upvotes: %d - Downvotes: %d\n< Rewon by: %d\n\t",
-							p.id, p.title, p.contents, p.upvotes, p.downvotes, p.rewonBy.length);
-					for (String r: p.rewonBy) System.out.printf("%s", r);
-					System.out.printf("\n< Comments: %d\n", p.comments.length);
-					for (Post.Comment c : p.comments)
-						System.out.printf("\t%s:\n\"%s\"\n", c.author, c.contents);
-				}
-				continue;
-			}
-			if (command[0].equals(DELETE_POST_STRING))
-			{
-				if (command.length != 2)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.deletePost(loggedInUsername, Integer.parseInt(command[1]), client, true); }
-				catch (NumberFormatException e)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0) System.out.println("< Post has now been deleted.");
-				continue;
-			}
-			if (command[0].equals(REWIN_STRING))
-			{
-				if (command.length != 2)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.rewinPost(loggedInUsername, Integer.parseInt(command[1]), client, true); }
-				catch (NumberFormatException e)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0) System.out.println("< Post has now been rewon.");
-				continue;
-			}
-			if (command[0].equals(RATE_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.ratePost(loggedInUsername, Integer.parseInt(command[1]), Integer.parseInt(command[2]), client, true); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					System.out.println("< New vote added.");
-					continue;
-				}
-			}
-			if (command[0].equals(COMMENT_STRING))
-			{
-				if (command.length != 3)
-				{
-					System.err.println(INVALID_SYNTAX);
-					continue;
-				}
-				try { result = Command.addComment(loggedInUsername, Integer.parseInt(command[1]), command[2], client, true); }
-				catch (NullPointerException e)
-				{
-					System.err.println(NOT_LOGGED_IN);
-					continue;
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					break;
-				}
-				if (result == -1)
-				{
-					System.err.println(SERVER_DISCONNECT);
-					break;
-				}
-				if (result == 0)
-				{
-					System.out.println("< New comment added.");
-					continue;
-				}
-			}
-		}
-		System.out.println("Client is now freeing resources...");
-		try
+		}));
+
+	loop:
+		while(true)
 		{
-			callback.unregisterForCallback(callbackObject);
-			UnicastRemoteObject.unexportObject(callbackObject, true);
+			if (loggedInUsername == null) System.out.printf("> ");
+			else System.out.printf("%s> ", loggedInUsername);
+
+			final String s = scanner.nextLine();
+
+			Set<String> destSet = new HashSet<>();
+			StringBuilder destStringBuilder = new StringBuilder();
+
+			switch (s)
+			{
+				case QUIT:
+					System.exit(0);
+
+				case HELP:
+					System.out.printf("register <username> <password> <tags>:\n\tRegister.\n");
+					continue loop;
+
+				case LOGOUT:
+					try { result = Command.logout(loggedInUsername, channel, true); }
+					catch (NullPointerException e)
+					{
+						if (loggedInUsername == null)
+							System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+						
+						case 0:
+							System.out.println("< " + loggedInUsername + " has now logged out.");
+							loggedInUsername = null;
+							try
+							{
+								callback.unregisterForCallback(callbackObject);
+								UnicastRemoteObject.unexportObject(callbackObject, true);
+							}
+							catch (RemoteException e)
+							{
+								System.err.println("Fatal error occurred while cleaning up previously allocated resources.");
+								System.exit(1);
+							}
+							callbackObject = null;
+					}
+					continue loop;
+
+				case LIST_USERS:
+					destSet = new HashSet<>();
+					try { result = Command.listUsers(loggedInUsername, channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+						
+						case 0:
+							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " does not share interests with any user.");
+							else
+							{
+								System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+								System.out.println("< -------------------------------------------------------------------------------");
+								for (String u: destSet)
+								{
+									User tmp = User.fromJSON(u);
+									System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+								}
+							}
+					}
+					continue loop;
+
+				case LIST_FOLLOWERS:
+					try { destSet = callbackObject.recoverFollowers(); }
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					if (destSet.isEmpty()) System.out.println(loggedInUsername + " is not followed by any user.");
+					else
+					{
+						System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+						System.out.println("< -------------------------------------------------------------------------------");
+						for (String u: destSet)
+						{
+							User tmp = User.fromJSON(u);
+							System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+						}
+					}
+					continue loop;
+
+				case LIST_FOLLOWING:
+					try { result = Command.listFollowing(loggedInUsername, channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start following any user.");
+						else
+						{
+							System.out.println(String.format("< %30s %25s %10s", "USERNAME", "|", "TAGS"));
+							System.out.println("< -------------------------------------------------------------------------------");
+							for (String u: destSet)
+							{
+								User tmp = User.fromJSON(u);
+								System.out.println(String.format("< %30s %25s %10s", tmp.username, "|", String.join(", ", tmp.tags)));
+							}
+						}
+					}
+					continue loop;
+
+				case BLOG:
+					try { result = Command.viewBlog(loggedInUsername, channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							if (destSet.isEmpty()) System.out.println("< " + loggedInUsername + " has yet to start posting.");
+							else
+							{
+								System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
+								System.out.println("< --------------------------------------------------------------------------");
+								for (String p: destSet)
+								{
+									PostPreview tmp = PostPreview.fromJSON(p);
+									System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+								}
+							}
+					}
+					continue loop;
+
+				case SHOW_FEED:
+					try { result = Command.showFeed(loggedInUsername, channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							if (destSet.isEmpty()) System.out.println("< The users " + loggedInUsername + " is following have yet to start posting.");
+							else
+							{
+								System.out.println(String.format("< %5s %5s %15s %15s %15s", "ID", "|", "AUTHOR", "|", "TITLE"));
+								System.out.println("< --------------------------------------------------------------------------");
+								for (String p: destSet)
+								{
+									PostPreview tmp = PostPreview.fromJSON(p);
+									System.out.println(String.format("< %5s %5s %15s %15s %15s", tmp.id, "|", tmp.author, "|", tmp.title));
+								}
+							}
+					}
+					continue loop;
+
+				case WALLET:
+					try { result = Command.getWallet(loggedInUsername, channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+						{
+							double total = 0;
+							boolean flag = true; // toggled on if the first element of the set is yet to be printed
+							for (String t: destSet)
+							{
+								Transaction tmp = null;
+								try
+								{
+									tmp = Transaction.fromJSON(t);
+									if (flag)
+									{
+										System.out.println(String.format("< %30s %25s %10s", "AMOUNT", "|", "TIMESTAMP"));
+										System.out.println("< -------------------------------------------------------------------------------");
+									}
+									flag = false;
+									System.out.println(String.format("< %30s %25s %10s", tmp.amount, "|", tmp.timestamp));
+								}
+								catch (JsonSyntaxException e) { total = Double.parseDouble(t); }
+							}
+							System.out.printf("< TOTAL: %f WINCOINS\n", total);
+						}
+					}
+					continue loop;
+				
+				case WALLET_BTC:
+					try { result = Command.getWalletInBitcoin(loggedInUsername, channel, destStringBuilder, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.printf("< %s BTC\n", destStringBuilder.toString());
+					}
+					continue loop;
+				
+				default:
+					break;
+			}
+
+			final String[] command = parseQuotes(s);
+			final int len = command.length;
+
+			if (len == 0) continue loop;
+			switch (command[0])
+			{
+				case REGISTER:
+				{
+					if (len < 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					if (loggedInUsername != null)
+					{
+						System.err.println("A new user cannot be registered before logging out.");
+						continue loop;
+					}
+					Set<String> tags = new HashSet<>();
+					for (int i = 3; i < len; i++) tags.add(command[i]);
+					try { Command.register(command[1], command[2], tags, configuration.portNoRegistry, configuration.registerServiceName, true); }
+					catch (RemoteException | NotBoundException e)
+					{
+						System.err.println("Fatal error occurred during registration, now aborting...");
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (UsernameNotValidException | PasswordNotValidException | InvalidTagException | TagListTooLongException e)
+					{
+						System.err.printf("< Given credentials do not meet the requirements:\n%s\n", e.getMessage());
+						continue loop;
+					}
+					catch (UsernameAlreadyExistsException e)
+					{
+						System.err.println("Username has already been taken.");
+						continue loop;
+					}
+					continue loop;
+				}
+
+				case LOGIN:
+					if (len != 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.login(command[1], command[2], channel, destSet, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							loggedInUsername = command[1];
+							System.out.println("< " + command[1] + " has now logged in.");
+							try
+							{
+								callbackObject = new RMIFollowersSet(destSet);
+								callback.registerForCallback(callbackObject, loggedInUsername);
+							}
+							catch (RemoteException e)
+							{
+								System.err.println("Fatal error occurred while setting up RMI callbacks: now aborting...");
+								e.printStackTrace();
+								System.exit(1);
+							}
+					}
+					continue loop;
+
+				case FOLLOW:
+					if (len != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.followUser(loggedInUsername, command[1], channel, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< " + loggedInUsername + " has now started following " + command[1]);
+							break;
+					}
+					continue loop;
+
+				case UNFOLLOW:
+					if (len != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.unfollowUser(loggedInUsername, command[1], channel, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< " + loggedInUsername + " has now stopped following " + command[1]);
+							break;
+					}
+					continue loop;
+
+				case POST:
+					if (len != 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.createPost(loggedInUsername, command[1], command[2], channel, destStringBuilder, true); }
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< New post created: ID " + destStringBuilder.toString());
+							break;
+					}
+					continue loop;
+				
+				case SHOW:
+					if (len != 3 || !(String.format("%s %s", command[0], command[1]).equals(SHOW_POST)))
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.showPost(loggedInUsername, Integer.parseInt(command[2]), channel, destStringBuilder, true); }
+					catch (NumberFormatException e)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							Post p = Post.fromJSON(destStringBuilder.toString());
+							System.out.printf("< ID: %d\n< Title: %s\n< Contents:\n\t%s\n< Upvotes: %d - Downvotes: %d\n< Rewon by: %d\n\t",
+										p.id, p.title, p.contents, p.upvotes, p.downvotes, p.rewonBy.length);
+							for (String r: p.rewonBy) System.out.printf("%s", r);
+							System.out.printf("\n< Comments: %d\n", p.comments.length);
+							for (Post.Comment c : p.comments) System.out.printf("\t%s:\n\"%s\"\n", c.author, c.contents);
+							break;
+					}
+					continue loop;
+
+				case DELETE:
+					if (len != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.deletePost(loggedInUsername, Integer.parseInt(command[1]), channel, true); }
+					catch (NumberFormatException e)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< Post has now been deleted.");
+							break;
+					}
+					continue loop;
+
+				case REWIN:
+					if (len != 2)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.rewinPost(loggedInUsername, Integer.parseInt(command[1]), channel, true); }
+					catch (NumberFormatException e)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< Post has now been rewon.");
+					}
+					continue loop;
+
+				case RATE:
+					if (len != 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.ratePost(loggedInUsername, Integer.parseInt(command[1]), Integer.parseInt(command[2]), channel, true); }
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					catch (NumberFormatException e)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< New vote added.");
+					}
+					continue loop;
+
+				case COMMENT:
+					if (len != 3)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					try { result = Command.addComment(loggedInUsername, Integer.parseInt(command[1]), command[2], channel, true); }
+					catch (NullPointerException e)
+					{
+						System.err.println(NOT_LOGGED_IN);
+						continue loop;
+					}
+					catch (NumberFormatException e)
+					{
+						System.err.println(INVALID_SYNTAX);
+						continue loop;
+					}
+					catch (IOException e)
+					{
+						System.err.println(FATAL_IO);
+						e.printStackTrace();
+						System.exit(1);
+					}
+					switch (result)
+					{
+						case -1:
+							System.err.println(SERVER_DISCONNECT);
+							System.exit(0);
+
+						case 0:
+							System.out.println("< New comment added.");
+					}
+					continue loop;
+
+
+				default:
+					System.out.println(INVALID_SYNTAX);
+					break;
+			}
 		}
-		catch (RemoteException ignored) { }
-		scanner.close();
-		try { client.close(); }
-		catch (IOException ignored) { }
 	}
 
 	private static String[] parseQuotes(String quotedString)

@@ -94,7 +94,7 @@ public class User
 	public void addTransaction(Transaction t)
 	throws InvalidAmountException
 	{
-		System.out.println(username + " " + t.amount + " " + t.instant.toString());
+		// System.out.println(username + " " + t.amount + " " + t.instant.toString());
 		synchronized(this) { transactions.add(t); }
 	}
 

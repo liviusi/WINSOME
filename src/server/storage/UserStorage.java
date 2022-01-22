@@ -114,6 +114,12 @@ public interface UserStorage
 	public boolean handleUnfollowUser(final String followerUsername, final String followedUsername)
 	throws NoSuchUserException, NullPointerException;
 
+	public Set<String> handleGetWallet(final String username)
+	throws NoSuchUserException, NullPointerException;
+
+	public String handleGetWalletInBitcoin(final String username)
+	throws IOException, NoSuchUserException, NullPointerException;
+
 	/**
 	 * @brief Backs up WINSOME registered users' set according to json syntax.
 	 * @param file the file to store the list in (will be overwritten).

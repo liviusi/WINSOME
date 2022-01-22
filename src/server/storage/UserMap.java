@@ -1,17 +1,20 @@
 package server.storage;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -282,6 +285,49 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			followersMap.compute(followedUser, (k, v) -> v.stream().filter(user -> !user.equals(followerUser)).collect(Collectors.toSet()));
 
 		return result;
+	}
+
+	public Set<String> handleGetWallet(final String username)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+
+		Set<String> r = new HashSet<>();
+		User u = null;
+		List<Transaction> transactions = null;
+
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
+		transactions = u.getTransactions();
+		r.add(Double.toString(transactions.stream().mapToDouble(t -> t.amount).sum()) + "\r\n");
+		for (Transaction t: transactions) r.add(t.toFormattedString());
+
+		return r;
+	}
+
+	public String handleGetWalletInBitcoin(final String username)
+	throws IOException, NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+
+		User u = null;
+		double rate = -1;
+
+		u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
+		if (u == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+
+		double wallet = u.getTransactions().stream().mapToDouble(t -> t.amount).sum();
+
+		final String randomGenURL = "https://www.random.org/decimal-fractions/?num=1&dec=10&col=1&format=plain&rnd=new";
+
+		BufferedReader in = new BufferedReader(new InputStreamReader(new URL(randomGenURL).openStream()));
+		rate = Double.parseDouble(in.readLine());
+		in.close();
+		
+		return Double.toString(wallet * rate);
 	}
 
 	public void backupUsers(final File usersFile)

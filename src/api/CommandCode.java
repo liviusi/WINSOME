@@ -22,7 +22,9 @@ public enum CommandCode
 	DELETEPOST("Delete post"),
 	REWIN("Rewin"),
 	COMMENT("Comment"),
-	RATE("Rate");
+	RATE("Rate"),
+	WALLET("Wallet"),
+	WALLETBTC("Wallet BTC");
 
 	/** Used to represent the command as a string. */
 	public final String description;

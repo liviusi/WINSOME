@@ -205,7 +205,7 @@ public class Command
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
-	public static int listUsers(String username, SocketChannel server, boolean verbose, Set<String> dest)
+	public static int listUsers(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -247,7 +247,7 @@ public class Command
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
-	public static int listFollowing(String username, SocketChannel server, boolean verbose, Set<String> dest)
+	public static int listFollowing(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -380,7 +380,7 @@ public class Command
 		return 0;
 	}
 
-	public static int createPost(final String author, final String title, final String contents, final SocketChannel server, final boolean verbose, StringBuilder dest)
+	public static int createPost(final String author, final String title, final String contents, final SocketChannel server, StringBuilder dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(author, "Author" + NULL_ERROR);
@@ -586,6 +586,69 @@ public class Command
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
 		if (r.code == ResponseCode.OK) return 0;
+		else
+		{
+			printIf(r, verbose);
+			return 1;
+		}
+	}
+
+	public static int getWallet(final String username, final SocketChannel server, final Set<String> dest, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		Response<Set<String>> r = null;
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.WALLET.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
+		r = Response.parseAnswer(baos.toByteArray());
+		if (r == null)
+		{
+			Response<String> retry = Response.parseAnswer(StandardCharsets.US_ASCII.decode(ByteBuffer.wrap(baos.toByteArray())).toString());
+			if (retry == null) throw new IOException(RESPONSE_FAILURE);
+			else
+			{
+				printIf(retry, verbose);
+				return 1;
+			}
+		}
+		for (String s: r.body) dest.add(s);
+		return 0;
+	}
+
+	public static int getWalletInBitcoin(final String username, final SocketChannel server, final StringBuilder dest, final boolean verbose)
+	throws IOException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(server, "Server" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+
+		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
+		byte[] bytes = null;
+		Response<String> r = null;
+		StringBuilder sb = new StringBuilder();
+
+		buffer.flip(); buffer.clear();
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.WALLETBTC.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
+		Communication.send(server, buffer, bytes);
+		buffer.flip(); buffer.clear();
+		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+		r = Response.parseAnswer(sb.toString());
+		if (r == null) throw new IOException(RESPONSE_FAILURE);
+		if (r.code == ResponseCode.OK)
+		{
+			dest.append(r.body);
+			return 0;
+		}
 		else
 		{
 			printIf(r, verbose);
