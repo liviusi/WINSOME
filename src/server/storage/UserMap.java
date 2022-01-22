@@ -335,18 +335,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		return Double.toString(wallet * rate);
 	}
 
-	public void backupUsers(final File usersFile)
+	public synchronized void backupUsers(final File usersFile)
 	throws FileNotFoundException, IOException
 	{
-		Map<String, User> tmp = null;
-		boolean flag = true;
-		synchronized(monitor)
-		{
-			tmp = new HashMap<>(usersToBeBackedUp);
-			usersToBeBackedUp = new ConcurrentHashMap<>();
-			flag = usersFirstBackupAndNonEmptyStorage;
-			usersFirstBackupAndNonEmptyStorage = false;
-		}
 		backupCached(new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
@@ -359,10 +350,12 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				return false;
 			}
-		}, usersFile, usersBackedUp, tmp, flag);
+		}, usersFile, usersBackedUp, usersToBeBackedUp, usersFirstBackupAndNonEmptyStorage);
+		usersFirstBackupAndNonEmptyStorage = false;
+		usersToBeBackedUp = new ConcurrentHashMap<>();
 	}
 
-	public void backupFollowing(File followingFile)
+	public synchronized void backupFollowing(File followingFile)
 	throws FileNotFoundException, IOException
 	{
 		backupNonCached(new ExclusionStrategy()
@@ -381,15 +374,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		}, followingFile, usersBackedUp);
 	}
 
-	public void backupTransactions(File transactionsFile)
+	public synchronized void backupTransactions(File transactionsFile)
 	throws FileNotFoundException, IOException
 	{
-		Set<User> tmp = new HashSet<>();
-		synchronized(monitor)
-		{
-			usersBackedUp.values().forEach(u -> tmp.add(u));
-		}
-
 		backupNonCached(new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
@@ -403,7 +390,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				return false;
 			}
-		}, transactionsFile, tmp);
+		}, transactionsFile, usersBackedUp);
 	}
 
 	/**
