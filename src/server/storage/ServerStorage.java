@@ -13,6 +13,7 @@ import server.post.InvalidPostException;
 import user.InvalidLoginException;
 import user.InvalidLogoutException;
 import user.InvalidTagException;
+import user.SameUserException;
 import user.TagListTooLongException;
 import user.WrongCredentialsException;
 
@@ -65,7 +66,7 @@ public class ServerStorage
 	}
 
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
-	throws NoSuchUserException, NullPointerException
+	throws SameUserException, NoSuchUserException, NullPointerException
 	{
 		return users.handleFollowUser(followerUsername, followedUsername);
 	}

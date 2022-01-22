@@ -134,7 +134,7 @@ public class ClientMain
 	private static final String DELETE_POST_STRING = "delete";
 	private static final String REWIN_STRING = "rewin";
 	private static final String RATE_STRING = "rate";
-	// private static final String COMMENT_STRING = "comment";
+	private static final String COMMENT_STRING = "comment";
 
 	private static final Gson gson = new Gson();
 
@@ -698,7 +698,6 @@ public class ClientMain
 					continue;
 				}
 			}
-			/**
 			if (command[0].equals(COMMENT_STRING))
 			{
 				if (command.length != 3)
@@ -706,7 +705,7 @@ public class ClientMain
 					System.err.println(INVALID_SYNTAX);
 					continue;
 				}
-				try { result = Command.comment(loggedInUsername, Integer.parseInt(command[1]), command[2], client, true); }
+				try { result = Command.addComment(loggedInUsername, Integer.parseInt(command[1]), command[2], client, true); }
 				catch (NullPointerException e)
 				{
 					System.err.println(NOT_LOGGED_IN);
@@ -728,7 +727,6 @@ public class ClientMain
 					continue;
 				}
 			}
-			*/
 		}
 		System.out.println("Client is now freeing resources...");
 		try

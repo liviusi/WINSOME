@@ -357,11 +357,11 @@ public class PostMap extends Storage implements PostStorage
 			reader.beginObject();
 			String name = null;
 			int id = -1;
-			String author = null;
-			String contents = null;
 			List<String> rewinners = new ArrayList<>();
 			List<String> upvoters = new ArrayList<>();
 			List<String> downvoters = new ArrayList<>();
+			List<String> commentAuthors = new ArrayList<>();
+			List<String> commentContents = new ArrayList<>();
 			for (int i = 0; i < 5; i++)
 			{
 				name = reader.nextName();
@@ -379,10 +379,8 @@ public class PostMap extends Storage implements PostStorage
 							for (int j = 0; j < 2; j++)
 							{
 								name = reader.nextName();
-								if (name.equals("author"))
-									author = reader.nextString();
-								else if (name.equals("contents"))
-									contents = reader.nextString();
+								if (name.equals("author")) commentAuthors.add(reader.nextString());
+								else if (name.equals("contents")) commentContents.add(reader.nextString());
 							}
 							reader.endObject();
 						}
@@ -417,9 +415,12 @@ public class PostMap extends Storage implements PostStorage
 			}
 			reader.endObject();
 
-			try { map.handleAddComment(author, users, id, contents); }
-			catch (InvalidCommentException | NoSuchPostException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			catch (NullPointerException noComments) { }
+			if (commentAuthors.size() != commentContents.size()) throw new IllegalArchiveException(INVALID_STORAGE);
+			for (int i = 0; i < commentAuthors.size(); i++)
+			{
+				try { map.handleAddComment(commentAuthors.get(i), users, id, commentContents.get(i)); }
+				catch (InvalidCommentException | NoSuchPostException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			}
 			for (String r : rewinners)
 			{
 				try { map.handleRewin(r, users, id); }

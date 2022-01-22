@@ -564,8 +564,7 @@ public class Command
 		}
 	}
 
-	/**
-	public static int comment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
+	public static int addComment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(author, "Author" + NULL_ERROR);
@@ -578,8 +577,8 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = (CommandCode.COMMENT.description + Constants.DELIMITER + author + Constants.DELIMITER + postID + Constants.DELIMITER + contents)
-			.getBytes(StandardCharsets.US_ASCII);
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\", \"%s\": \"%s\" }", COMMAND, CommandCode.COMMENT.description,
+				USERNAME, author, POSTID, postID, CONTENTS, contents).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -593,7 +592,6 @@ public class Command
 			return 1;
 		}
 	}
-	*/
 
 	/**
 	 * @brief Prints on System.out if flag is toggled on.
