@@ -41,7 +41,13 @@ TARGETS = run-client run-server build
 .SameUserException:
 	$(JC) $(CP) $(JFLAGS) src/user/SameUserException.java $(OUTPUTDIR)
 
-.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .SameUserException
+.InvalidAmountException:
+	$(JC) $(CP) $(JFLAGS) src/user/InvalidAmountException.java $(OUTPUTDIR)
+
+.Transaction: .InvalidAmountException
+	$(JC) $(CP) $(JFLAGS) src/user/Transaction.java $(OUTPUTDIR)
+
+.User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .SameUserException .Transaction
 	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
 
 .InvalidCommentException:
@@ -83,7 +89,7 @@ TARGETS = run-client run-server build
 .Storage:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/Storage.java $(OUTPUTDIR)
 
-.UserStorage: .UserRMIStorage .IllegalArchiveException .Storage
+.UserStorage: .UserRMIStorage .IllegalArchiveException .Storage .Post
 	$(JC) $(CP) $(JFLAGS) src/server/storage/UserStorage.java $(OUTPUTDIR)
 
 .UserMap: .UserStorage .UserRMIStorage
@@ -100,6 +106,9 @@ TARGETS = run-client run-server build
 
 .BackupTask: .UserMap .ServerConfiguration
 	$(JC) $(CP) $(JFLAGS) src/server/BackupTask.java $(OUTPUTDIR)
+
+.RewardsTask: .PostStorage .UserStorage
+	$(JC) $(CP) $(JFLAGS) src/server/RewardsTask.java $(OUTPUTDIR)
 
 .RMIFollowers:
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
@@ -134,7 +143,7 @@ TARGETS = run-client run-server build
 ClientMain: .Command .RMIFollowersSet .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode
+ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: ServerMain ClientMain
