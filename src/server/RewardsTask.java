@@ -10,7 +10,7 @@ public class RewardsTask implements Runnable
 	private UserStorage users = null;
 	private PostStorage posts = null;
 
-	public final int interval = 500;
+	public final int interval = 5000;
 
 	public RewardsTask(UserStorage users, PostStorage posts)
 	{

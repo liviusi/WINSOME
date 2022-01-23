@@ -6,16 +6,15 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,6 +22,7 @@ import java.util.stream.Stream;
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.stream.JsonReader;
 
@@ -383,6 +383,7 @@ public class PostMap extends Storage implements PostStorage
 
 		PostMap map = new PostMap();
 		map.flag = true;
+		Map<Integer, JsonObject> parsedPosts = new HashMap<>();
 
 		InputStream is = new FileInputStream(backupPostsFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
@@ -393,48 +394,37 @@ public class PostMap extends Storage implements PostStorage
 		{
 			reader.beginObject();
 			String name = null;
-			String author = null;
-			String title = null;
-			String contents = null;
 			int id = -1;
-			Post p = null;
 			for (int i = 0; i < 4; i++)
 			{
 				name = reader.nextName();
 				switch (name)
 				{
 					case "id":
-						id = Integer.parseInt(reader.nextString());
+						id = reader.nextInt();
+						if (parsedPosts.putIfAbsent(id, new JsonObject()) != null) throw new IllegalArchiveException(INVALID_STORAGE);
 						break;
 
 					case "author":
-						author = reader.nextString();
+						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
 						break;
 
 					case "title":
-						title = reader.nextString();
+						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
 						break;
 
 					case "contents":
-						contents = reader.nextString();
+						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
 						break;
 
 					default:
-						reader.skipValue();
-						break;
+						throw new IllegalArchiveException(INVALID_STORAGE);
 				}
 			}
 			reader.endObject();
-			try
-			{
-				p = new RewinPost(author, title, contents);
-				if (id != p.getID()) throw new IllegalArchiveException("Archive is not in a consistent state.");
-			}
-			catch (InvalidPostException | InvalidGeneratorException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			map.postsBackedUp.put(p.getID(), p);
-			if (map.postsByAuthor.get(author) == null)
-				map.postsByAuthor.put(author, new HashSet<>());
-			map.postsByAuthor.get(author).add(p.getID());
 		}
 		reader.endArray();
 		reader.close();
@@ -443,7 +433,6 @@ public class PostMap extends Storage implements PostStorage
 		is = new FileInputStream(backupPostsMetadataFile);
 		reader = new JsonReader(new InputStreamReader(is));
 
-
 		reader.setLenient(true);
 		reader.beginArray();
 		while (reader.hasNext())
@@ -451,11 +440,14 @@ public class PostMap extends Storage implements PostStorage
 			reader.beginObject();
 			String name = null;
 			int id = -1;
-			List<String> rewinners = new ArrayList<>();
-			List<String> upvoters = new ArrayList<>();
-			List<String> downvoters = new ArrayList<>();
-			List<String> commentAuthors = new ArrayList<>();
-			List<String> commentContents = new ArrayList<>();
+			int newVotes = -1;
+			int iterations = -1;
+			JsonArray comments = new JsonArray();
+			JsonArray rewinners = new JsonArray();
+			JsonArray upvoters = new JsonArray();
+			JsonArray downvoters = new JsonArray();
+			JsonObject newCommentsBy = new JsonObject();
+			JsonArray newCurators = new JsonArray();
 			for (int i = 0; i < 9; i++)
 			{
 				name = reader.nextName();
@@ -463,6 +455,31 @@ public class PostMap extends Storage implements PostStorage
 				{
 					case "id":
 						id = reader.nextInt();
+						//System.out.println("id: " + id);
+						break;
+
+					case "rewonBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							rewinners.add(reader.nextString());
+						reader.endArray();
+						//System.out.println("\trewinners:" + rewinners);
+						break;
+
+					case "upvotedBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							upvoters.add(reader.nextString());
+						reader.endArray();
+						//System.out.println("\tupvoters:" + upvoters);
+						break;
+
+					case "downvotedBy":
+						reader.beginArray();
+						while (reader.hasNext())
+							downvoters.add(reader.nextString());
+						reader.endArray();
+						//System.out.println("\tdownvoters: " + downvoters);
 						break;
 
 					case "comments":
@@ -470,71 +487,75 @@ public class PostMap extends Storage implements PostStorage
 						while (reader.hasNext())
 						{
 							reader.beginObject();
+							JsonObject comment = new JsonObject();
 							for (int j = 0; j < 2; j++)
 							{
 								name = reader.nextName();
-								if (name.equals("author")) commentAuthors.add(reader.nextString());
-								else if (name.equals("contents")) commentContents.add(reader.nextString());
+								if (name.equals("author")) comment.addProperty(name, reader.nextString());
+								else if (name.equals("contents")) comment.addProperty(name, reader.nextString());
+								else throw new IllegalArchiveException(INVALID_STORAGE);
 							}
 							reader.endObject();
+							comments.add(comment);
 						}
 						reader.endArray();
+						//System.out.println("\tcomments: " + comments);
 						break;
-					
-					case "rewonBy":
+
+					case "newVotes":
+						newVotes = reader.nextInt();
+						break;
+
+					case "newCommentsBy":
+						reader.beginObject();
+						while (reader.hasNext())
+							newCommentsBy.addProperty(reader.nextName(), reader.nextInt());
+						reader.endObject();
+						//System.out.println("\tnewComments: " + newCommentsBy);
+						break;
+
+					case "newCurators":
 						reader.beginArray();
 						while (reader.hasNext())
-							rewinners.add(reader.nextString());
+							newCurators.add(reader.nextString());
 						reader.endArray();
+						//System.out.println("\tnewCurators: " + newCurators);
 						break;
-					
-					case "upvotedBy":
-						reader.beginArray();
-						while (reader.hasNext())
-							upvoters.add(reader.nextString());
-						reader.endArray();
+
+					case "iterations":
+						iterations = reader.nextInt();
 						break;
-					
-					case "downvotedBy":
-						reader.beginArray();
-						while (reader.hasNext())
-							downvoters.add(reader.nextString());
-						reader.endArray();
-						break;
-					
+
 					default:
-						reader.skipValue();
-						break;
+						throw new IllegalArchiveException(INVALID_STORAGE);
 				}
 			}
 			reader.endObject();
-
-			if (commentAuthors.size() != commentContents.size()) throw new IllegalArchiveException(INVALID_STORAGE);
-			for (int i = 0; i < commentAuthors.size(); i++)
+			try
 			{
-				try { map.handleAddComment(commentAuthors.get(i), users, id, commentContents.get(i)); }
-				catch (InvalidCommentException | NoSuchPostException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+				parsedPosts.get(id).add("rewonBy", rewinners);
+				parsedPosts.get(id).add("upvotedBy", upvoters);
+				parsedPosts.get(id).add("downvotedBy", downvoters);
+				parsedPosts.get(id).add("comments", comments);
+				parsedPosts.get(id).addProperty("newVotes", newVotes);
+				parsedPosts.get(id).add("newCommentsBy", newCommentsBy);
+				parsedPosts.get(id).add("newCurators", newCurators);
+				parsedPosts.get(id).addProperty("iterations", iterations);
 			}
-			for (String r : rewinners)
-			{
-				try { map.handleRewin(r, users, id); }
-				catch (NoSuchPostException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			}
-			for (String r : upvoters)
-			{
-				try { map.handleRate(r, users, id, Vote.UPVOTE); }
-				catch (NoSuchPostException | InvalidVoteException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			}
-			for (String r : downvoters)
-			{
-				try { map.handleRate(r, users, id, Vote.DOWNVOTE); }
-				catch (NoSuchPostException | InvalidVoteException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			}
+			catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
 		}
 		reader.endArray();
 		reader.close();
 		is.close();
 
+		Gson generator = new Gson();
+		for (Entry<Integer, JsonObject> entry: parsedPosts.entrySet())
+		{
+			Post p = generator.fromJson(entry.getValue(), RewinPost.class);
+			Set<Integer> tmp = new HashSet<>(); tmp.add(entry.getKey());
+			map.postsBackedUp.put(entry.getKey(), p);
+			map.postsByAuthor.compute(p.getAuthor(), (k, v) -> v == null ? tmp : Stream.concat(v.stream(), tmp.stream()).collect(Collectors.toSet()));
+		}
 		return map;
 	}
 

@@ -59,13 +59,13 @@ public class RewinPost extends Post
 	/** Contents of this post. */
 	private String contents = null;
 	/** Set of the names of the users whom have rewon this post. */
-	private Set<String> rewonBy = null;
+	private Set<String> rewonBy = ConcurrentHashMap.newKeySet();
 	/** Set of the names of the users whom have upvoted this post. */
-	private Set<String> upvotedBy = null;
+	private Set<String> upvotedBy = ConcurrentHashMap.newKeySet();
 	/** Set of the names of the users whom have downvoted this post. */
-	private Set<String> downvotedBy = null;
+	private Set<String> downvotedBy = ConcurrentHashMap.newKeySet();
 	/** Queue of the comments this post has received. */
-	private Queue<Comment> comments = null;
+	private Queue<Comment> comments = new ConcurrentLinkedQueue<Comment>();
 
 	private int newVotes = 0;
 	private Map<String, Integer> newCommentsBy = new HashMap<>();
@@ -96,10 +96,6 @@ public class RewinPost extends Post
 		this.author = author;
 		this.title = title;
 		this.contents = contents;
-		this.rewonBy = ConcurrentHashMap.newKeySet();
-		this.comments = new ConcurrentLinkedQueue<Comment>();
-		this.upvotedBy = ConcurrentHashMap.newKeySet();
-		this.downvotedBy = ConcurrentHashMap.newKeySet();
 	}
 
 	public int getID()
