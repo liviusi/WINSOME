@@ -485,12 +485,14 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	throws FileNotFoundException, IOException, IllegalArchiveException
 	{
 		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
+		Gson generator = new Gson();
 
 		UserMap map = new UserMap();
 		map.usersFirstBackupAndNonEmptyStorage = true;
 
 		InputStream is = new FileInputStream(usersFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
+		
 
 		reader.setLenient(true);
 		reader.beginArray();
@@ -599,7 +601,6 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			String name = null;
 			String username = null;
 			JsonObject object = new JsonObject();
-			Gson generator = new Gson();
 			for (int i = 0; i < 2; i++)
 			{
 				name = reader.nextName();
