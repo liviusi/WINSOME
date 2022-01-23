@@ -61,12 +61,8 @@ public class BackupTask implements Runnable
 			catch (InterruptedException shouldTerminate) { return; }
 			try
 			{
-				users.backupUsers(usersFile);
-				users.backupFollowing(followingFile);
-				users.backupTransactions(transactionsFile);
-				posts.backupPostsImmutableData(postsImmutableFile);
-				posts.backupPostsMutableData(postsReactionsFile);
-				users.backupTransactions(transactionsFile);
+				users.backupUsers(usersFile, followingFile, transactionsFile);
+				posts.backupPosts(postsImmutableFile, postsReactionsFile);
 			}
 			catch (IOException e)
 			{

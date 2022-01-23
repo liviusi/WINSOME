@@ -128,20 +128,6 @@ public interface UserStorage
 	 * @throws IOException if I/O error(s) occur.
 	 * @throws NullPointerException if file is null.
 	 */
-	public void backupUsers(final File file)
+	public void backupUsers(final File usersImmutableDataFile, final File followingFile, final File transactionsFile)
 	throws FileNotFoundException, IOException, NullPointerException;
-
-	/**
-	 * @brief For each user registered to WINSOME, it backs up their set of followed users according to json syntax.
-	 * @param file the file to store the list in (will be overwritten).
-	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
-	 * or cannot be opened for any other reason.
-	 * @throws IOException if I/O error(s) occur.
-	 * @throws NullPointerException if file is null.
-	 */
-	public void backupFollowing(final File file)
-	throws FileNotFoundException, IOException, NullPointerException;
-
-	public void backupTransactions(File transactionsFile)
-	throws FileNotFoundException, IOException;
 }

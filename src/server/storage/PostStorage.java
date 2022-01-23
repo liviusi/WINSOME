@@ -118,25 +118,6 @@ public interface PostStorage
 	public void handleAddComment(final String author, final UserStorage users, final int id, final String contents)
 	throws InvalidCommentException, NoSuchPostException, NullPointerException;
 
-	/**
-	 * @brief Backs up WINSOME users' posts according to json syntax.
-	 * @param file the file to store the list in (will be overwritten).
-	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
-	 * or cannot be opened for any other reason.
-	 * @throws IOException if I/O error(s) occur.
-	 * @throws NullPointerException if file is null.
-	 */
-	public void backupPostsImmutableData(final File backupPostsFile)
-	throws FileNotFoundException, IOException, NullPointerException;
-
-	/**
-	 * @brief Backs up WINSOME users' posts according to json syntax.
-	 * @param file the file to store the list in (will be overwritten).
-	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
-	 * or cannot be opened for any other reason.
-	 * @throws IOException if I/O error(s) occur.
-	 * @throws NullPointerException if file is null.
-	 */
-	public void backupPostsMutableData(final File backupPostsMetadataFile)
+	public void backupPosts(final File backupPostsImmutableDataFile, final File backupPostsMutableDataFile)
 	throws FileNotFoundException, IOException, NullPointerException;
 }

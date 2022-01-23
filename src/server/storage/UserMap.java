@@ -12,14 +12,14 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -48,33 +48,34 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	/** Maps a user to the set of users currently following it. */
 	private Map<User, Set<User>> followersMap = null;
 
-	private final Object monitor = new Object();
+	private ReentrantReadWriteLock backupLock = new ReentrantReadWriteLock(true);
+	private ReentrantReadWriteLock dataAccessLock = new ReentrantReadWriteLock(true);
 
 	/** Empty string. */
 	private static final String EMPTY_STRING = "";
 	/** Part of the exception message when NPE is thrown. */
-	private static final String NULL_PARAM_ERROR = " cannot be null.";
+	private static final String NULL_ERROR = " cannot be null.";
 	/** Part of the exception message when a user cannot be find in the storage. */
 	private static final String NOT_SIGNED_UP = " has yet to sign up.";
 
 	/** Default constructor. */
 	public UserMap()
 	{
-		usersBackedUp = new ConcurrentHashMap<>();
-		usersToBeBackedUp = new ConcurrentHashMap<>();
+		usersBackedUp = new HashMap<>();
+		usersToBeBackedUp = new HashMap<>();
 		usersFirstBackupAndNonEmptyStorage = false;
-		interestsMap = new ConcurrentHashMap<>();
-		followersMap = new ConcurrentHashMap<>();
+		interestsMap = new HashMap<>();
+		followersMap = new HashMap<>();
 	}
 
 	public void register(final String username, final String password, final Set<String> tags, final byte[] salt)
 	throws NullPointerException, RemoteException, UsernameNotValidException, UsernameAlreadyExistsException,
 		PasswordNotValidException, InvalidTagException, TagListTooLongException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(password, "Password" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(tags, "Tags" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(salt, "Salt" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(password, "Password" + NULL_ERROR);
+		Objects.requireNonNull(tags, "Tags" + NULL_ERROR);
+		Objects.requireNonNull(salt, "Salt" + NULL_ERROR);
 
 		final String EMPTY_ERROR = " cannot be empty.";
 		String emptyStringHashed = null;
@@ -85,312 +86,386 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		if (emptyStringHashed.equals(password)) throw new PasswordNotValidException("Password" + EMPTY_ERROR);
 		u = new User(username, password, tags, salt);
 
-		synchronized(monitor) // synchronizing over monitor is needed to avoid toctou
+		try
 		{
-			if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
-				throw new UsernameAlreadyExistsException("Username has already been taken.");
-			usersToBeBackedUp.put(username, u);
-			u.getTags().forEach(t -> 
+			backupLock.readLock().lock();
+			try
 			{
-				Set<User> tmp = new HashSet<>(); tmp.add(u);
-				Set<User> value = null;
-				if ((value = interestsMap.get(t)) == null) interestsMap.put(t, tmp);
-				else value.add(u);
-			});
-			followersMap.put(u, new HashSet<>());
+				dataAccessLock.writeLock().lock();
+				if (usersToBeBackedUp.containsKey(username) || usersBackedUp.containsKey(username)) // username already exists
+					throw new UsernameAlreadyExistsException("Username has already been taken.");
+				usersToBeBackedUp.put(username, u);
+				u.getTags().forEach(t -> 
+					{
+						Set<User> tmp = new HashSet<>(); tmp.add(u);
+						Set<User> value = null;
+						if ((value = interestsMap.get(t)) == null) interestsMap.put(t, tmp);
+						else value.add(u);
+				});
+				followersMap.put(u, new HashSet<>());
+			}
+			finally { dataAccessLock.writeLock().unlock(); }
 		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-		
-		return followersMap.get(u)
-			.stream()
-			.map(follower ->
-				follower.toString())
-			.collect(Collectors.toSet());
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				return followersMap.get(u)
+					.stream()
+					.map(follower ->
+						follower.toString())
+				.collect(Collectors.toSet());
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public void updateRewards(Map<String, GainAndCurators> gains, double authorPercentage)
-	throws InvalidAmountException, NoSuchUserException, NullPointerException
+	throws IllegalArgumentException, InvalidAmountException, NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(gains, "Gains" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(gains, "Gains" + NULL_ERROR);
 		if (authorPercentage < 0 || authorPercentage > 100) throw new IllegalArgumentException("Author percentage is not a valid percentage.");
 
 		User u = null;
-		Map<User, Set<Transaction>> newTransactions = new HashMap<>();
 		Transaction t = null;
 
-		for (Entry<String, GainAndCurators> entry: gains.entrySet())
+		try
 		{
-			final String username = entry.getKey();
-			final double gain = entry.getValue().gain;
-			if (gain == 0) continue;
-			final Set<String> curators = entry.getValue().getCurators();
-
-			if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-			t = new Transaction((gain * authorPercentage) / 100);
-			if (newTransactions.get(u) == null)
+			backupLock.readLock().lock();
+			try
 			{
-				Set<Transaction> set = new HashSet<>(); set.add(t);
-				newTransactions.put(u, set);
-			}
-			else newTransactions.get(u).add(t);
-
-			for (String s : curators)
-			{
-				if ((u = getUserByName(s)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-				t = new Transaction((gain * (100 - authorPercentage)) / 100);
-				if (newTransactions.get(u) == null)
+				dataAccessLock.readLock().lock();
+				for (Entry<String, GainAndCurators> entry: gains.entrySet())
 				{
-					Set<Transaction> tmpSet = new HashSet<>(); tmpSet.add(t);
-					newTransactions.put(u, tmpSet);
-				}
-				else newTransactions.get(u).add(t);
-			}
-		}
-		synchronized(monitor)
-		{
-			for (Entry<User, Set<Transaction>> entry: newTransactions.entrySet())
-			{
-				for (Transaction v: entry.getValue()) entry.getKey().addTransaction(v);
-			}
-		}
+					final String username = entry.getKey();
+					final double gain = entry.getValue().gain;
+					final Set<String> curators = entry.getValue().getCurators();
 
+					if (gain == 0) continue;
+					if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+					t = new Transaction((gain * authorPercentage) / 100);
+					u.addTransaction(t);
+
+					for (String s: curators)
+					{
+						if ((u = getUserByName(s)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+						t = new Transaction((gain * (100 - authorPercentage)) / 100);
+						u.addTransaction(t);
+					}
+				}
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public String handleLoginSetup(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		return u.saltDecoded;
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				return u.saltDecoded;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public void handleLogin(final String username, final SocketChannel clientID, final String hashPassword)
 	throws InvalidLoginException, NoSuchUserException, WrongCredentialsException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(clientID, "Client ID" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(hashPassword, "Hashed password" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(clientID, "Client ID" + NULL_ERROR);
+		Objects.requireNonNull(hashPassword, "Hashed password" + NULL_ERROR);
 
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		u.login(clientID, hashPassword);
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				u.login(clientID, hashPassword);
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public void handleLogout(final String username, final SocketChannel clientID)
 	throws NoSuchUserException, InvalidLogoutException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(clientID, "Client ID" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(clientID, "Client ID" + NULL_ERROR);
 
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		u.logout(clientID);
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				u.logout(clientID);
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> handleListUsers(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		Set<String> r = new HashSet<>();
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		u.getTags().forEach(t ->
-			interestsMap.get(t).forEach(tUser ->
+		try
+		{
+			backupLock.readLock().lock();
+			try
 			{
-				if (!tUser.username.equals(username))
-				{
-					r.add(tUser.toString());
-				}
-			})
-		);
-
-		return r;
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				u.getTags().forEach(t ->
+					interestsMap.get(t).forEach(tUser ->
+					{
+						if (!tUser.username.equals(username)) r.add(tUser.toString());
+					})
+				);
+				return r;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> handleListFollowing(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		Set<String> r = new HashSet<>();
 		final User u;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		u.getFollowing().forEach(following ->
+		try
+		{
+			backupLock.readLock().lock();
+			try
 			{
-				try { r.add(usersBackedUp.get(following).toString()); }
-				catch (NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				u.getFollowing().forEach(following ->
+				{
+					try { r.add(usersBackedUp.get(following).toString()); }
+					catch (NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
+				});
+				return r;
 			}
-		);
-
-		return r;
-		
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public boolean handleFollowUser(final String followerUsername, final String followedUsername)
 	throws SameUserException, NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_ERROR);
+		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_ERROR);
 
-		final String NO_USER_ERROR = "No user could be found for given name: ";
 		final User followerUser;
 		final User followedUser;
 		boolean result = false;
 
-		if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
-		if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
-
-		result = followerUser.follow(followedUser);
-		if (result)
+		try
 		{
-			Set<User> tmp = new HashSet<>();
-			tmp.add(followerUser);
-			followersMap.compute(followedUser, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.writeLock().lock();
+				if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(followerUsername + NOT_SIGNED_UP);
+				if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(followedUsername + NOT_SIGNED_UP);
+				result = followerUser.follow(followedUser);
+				if (result)
+				{
+					Set<User> tmp = new HashSet<>(); tmp.add(followerUser);
+					followersMap.compute(followedUser, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
+				}
+				return result;
+			}
+			finally { dataAccessLock.writeLock().unlock(); }
 		}
-
-		return result;
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public boolean handleUnfollowUser(final String followerUsername, final String followedUsername)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(followerUsername, "Follower user's username" + NULL_ERROR);
+		Objects.requireNonNull(followedUsername, "Followed user's username" + NULL_ERROR);
 
-		final String NO_USER_ERROR = "No user could be found for given name: ";
 		final User followerUser;
 		final User followedUser;
-		boolean result = false;
 
-		if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followerUsername);
-		if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(NO_USER_ERROR + followedUsername);
-
-		result = followerUser.unfollow(followedUser);
-		if (result)
-			followersMap.compute(followedUser, (k, v) -> v.stream().filter(user -> !user.equals(followerUser)).collect(Collectors.toSet()));
-
-		return result;
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.writeLock().lock();
+				if ((followerUser = getUserByName(followerUsername)) == null) throw new NoSuchUserException(followerUsername + NOT_SIGNED_UP);
+				if ((followedUser = getUserByName(followedUsername)) == null) throw new NoSuchUserException(followedUsername + NOT_SIGNED_UP);
+				if (followerUser.unfollow(followedUser))
+				{
+					followersMap.get(followedUser).remove(followerUser);
+					return true;
+				}
+				return false;
+			}
+			finally { dataAccessLock.writeLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> handleGetWallet(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		Set<String> r = new HashSet<>();
 		final User u;
 		List<Transaction> transactions = null;
 
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		transactions = u.getTransactions();
-		r.add(Double.toString(transactions.stream().mapToDouble(t -> t.amount).sum()) + "\r\n");
-		for (Transaction t: transactions) r.add(t.toString());
-
-		return r;
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				transactions = u.getTransactions();
+				r.add(Double.toString(transactions.stream().mapToDouble(t -> t.amount).sum()) + "\r\n");
+				for (Transaction t: transactions) r.add(t.toString());
+				return r;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public String handleGetWalletInBitcoin(final String username)
 	throws IOException, NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		final User u;
 		double rate = -1;
-
-		if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-
-		double wallet = u.getTransactions().stream().mapToDouble(t -> t.amount).sum();
-
 		final String randomGenURL = "https://www.random.org/decimal-fractions/?num=1&dec=10&col=1&format=plain&rnd=new";
 
-		BufferedReader in = new BufferedReader(new InputStreamReader(new URL(randomGenURL).openStream()));
-		rate = Double.parseDouble(in.readLine());
-		in.close();
+		try (InputStream ir = new URL(randomGenURL).openStream(); InputStreamReader isr = new InputStreamReader(ir); BufferedReader in = new BufferedReader(isr))
+		{
+			try { rate = Double.parseDouble(in.readLine()); }
+			catch (NumberFormatException shouldNeverBeThrown) { throw new IOException(shouldNeverBeThrown); }
+		}
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
+				return Double.toString(u.getTransactions().stream().mapToDouble(t -> t.amount).sum() * rate);
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 		
-		return Double.toString(wallet * rate);
 	}
 
-	public synchronized void backupUsers(final File usersFile)
-	throws FileNotFoundException, IOException
+	public void backupUsers(final File usersImmutableDataFile, final File followingFile, final File transactionsFile)
+	throws FileNotFoundException, IOException, NullPointerException
 	{
-		backupCached(new ExclusionStrategy()
-		{
-			public boolean shouldSkipField(FieldAttributes f)
-			{
-				// skips "following" field specified inside User class.
-				return f.getDeclaringClass() == User.class && (f.getName().equals("following") || f.getName().equals("transactions"));
-			}
+		Objects.requireNonNull(usersImmutableDataFile, "Users' immutable data file" + NULL_ERROR);
+		Objects.requireNonNull(followingFile, "Users' following file" + NULL_ERROR);
+		Objects.requireNonNull(transactionsFile, "Users' transactions' file" + NULL_ERROR);
 
-			public boolean shouldSkipClass(Class<?> clazz)
-			{
-				return false;
-			}
-		}, usersFile, usersBackedUp, usersToBeBackedUp, usersFirstBackupAndNonEmptyStorage);
-		usersFirstBackupAndNonEmptyStorage = false;
-		usersToBeBackedUp = new ConcurrentHashMap<>();
-	}
-
-	public synchronized void backupFollowing(File followingFile)
-	throws FileNotFoundException, IOException
-	{
-		backupNonCached(new ExclusionStrategy()
+		try
 		{
-			public boolean shouldSkipField(FieldAttributes f)
+			backupLock.writeLock().lock();
+			backupCached(new ExclusionStrategy()
 			{
-				// skips everything except username and following field
-				return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
-						!f.getName().equals("username");
-			}
-			
-			public boolean shouldSkipClass(Class<?> clazz)
-			{
-				return false;
-			}
-		}, followingFile, usersBackedUp);
-	}
+				public boolean shouldSkipField(FieldAttributes f)
+				{
+					// skips "following" field specified inside User class.
+					return f.getDeclaringClass() == User.class && (f.getName().equals("following") || f.getName().equals("transactions"));
+				}
 
-	public synchronized void backupTransactions(File transactionsFile)
-	throws FileNotFoundException, IOException
-	{
-		backupNonCached(new ExclusionStrategy()
-		{
-			public boolean shouldSkipField(FieldAttributes f)
+				public boolean shouldSkipClass(Class<?> clazz)
+				{
+					return false;
+				}
+			}, usersImmutableDataFile, usersBackedUp, usersToBeBackedUp, usersFirstBackupAndNonEmptyStorage);
+			usersFirstBackupAndNonEmptyStorage = false;
+			usersToBeBackedUp = new HashMap<>();
+
+			backupNonCached(new ExclusionStrategy()
 			{
-				// skips everything except username and transactions field
-				return f.getDeclaringClass() == User.class && !f.getName().equals("transactions") &&
-						!f.getName().equals("username");
-			}
-			
-			public boolean shouldSkipClass(Class<?> clazz)
+				public boolean shouldSkipField(FieldAttributes f)
+				{
+					// skips everything except username and following field
+					return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
+							!f.getName().equals("username");
+				}
+				
+				public boolean shouldSkipClass(Class<?> clazz)
+				{
+					return false;
+				}
+			}, followingFile, usersBackedUp);
+
+			backupNonCached(new ExclusionStrategy()
 			{
-				return false;
-			}
-		}, transactionsFile, usersBackedUp);
+				public boolean shouldSkipField(FieldAttributes f)
+				{
+					// skips everything except username and transactions field
+					return f.getDeclaringClass() == User.class && !f.getName().equals("transactions") &&
+							!f.getName().equals("username");
+				}
+				
+				public boolean shouldSkipClass(Class<?> clazz)
+				{
+					return false;
+				}
+			}, transactionsFile, usersBackedUp);
+		}
+		finally { backupLock.writeLock().unlock(); }
 	}
 
 	/**
@@ -532,12 +607,8 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 
 	private User getUserByName(final String username)
 	{
-		User u = null;
-		synchronized(monitor)
-		{
-			u = usersBackedUp.get(username);
-			if (u == null) u = usersToBeBackedUp.get(username);
-		}
+		User u = usersBackedUp.get(username);
+		if (u == null) u = usersToBeBackedUp.get(username);
 		return u;
 	}
 }

@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -47,8 +47,12 @@ public class PostMap extends Storage implements PostStorage
 	private Map<Integer, Post> postsToBeBackedUp = null;
 	/** Toggled on if this is the first backup and the storage has been recovered from a JSON file. */
 	private boolean flag = false;
+	/** Toggled on if a post has been deleted since the last backup. */
 	private boolean flush = false;
 	private Map<String, Set<Integer>> postsByAuthor = null;
+
+	private ReentrantReadWriteLock backupLock = new ReentrantReadWriteLock(true);
+	private ReentrantReadWriteLock dataAccessLock = new ReentrantReadWriteLock(true);
 
 	/** Part of the exception message when NPE is thrown. */
 	private static final String NULL_PARAM_ERROR = " cannot be null.";
@@ -60,9 +64,9 @@ public class PostMap extends Storage implements PostStorage
 		if (!Post.isIDGenerated())
 		try { Post.generateID(); }
 		catch (InvalidGeneratorException concurrentCreation) { throw new ConcurrentModificationException(concurrentCreation); }
-		postsBackedUp = new ConcurrentHashMap<>();
-		postsToBeBackedUp = new ConcurrentHashMap<>();
-		postsByAuthor = new ConcurrentHashMap<>();
+		postsBackedUp = new HashMap<>();
+		postsToBeBackedUp = new HashMap<>();
+		postsByAuthor = new HashMap<>();
 		flag = false;
 	}
 
@@ -70,9 +74,9 @@ public class PostMap extends Storage implements PostStorage
 	throws InvalidGeneratorException
 	{
 		Post.generateID(value);
-		postsBackedUp = new ConcurrentHashMap<>();
-		postsToBeBackedUp = new ConcurrentHashMap<>();
-		postsByAuthor = new ConcurrentHashMap<>();
+		postsBackedUp = new HashMap<>();
+		postsToBeBackedUp = new HashMap<>();
+		postsByAuthor = new HashMap<>();
 		flag = false;
 	}
 
@@ -80,10 +84,21 @@ public class PostMap extends Storage implements PostStorage
 	{
 		Map<String, GainAndCurators> map = new HashMap<>();
 
-		for (Post p: postsBackedUp.values())
-			map.put(p.getAuthor(), p.getGainAndCurators());
-
-		return map;
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				for (Post p: postsBackedUp.values())
+				map.put(p.getAuthor(), p.getGainAndCurators());
+				for (Post p: postsToBeBackedUp.values())
+				map.put(p.getAuthor(), p.getGainAndCurators());
+				return map;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public int handleCreatePost(final String author, final String title, final String contents)
@@ -98,10 +113,21 @@ public class PostMap extends Storage implements PostStorage
 		Set<Integer> tmp = new HashSet<>();
 
 		postID = p.getID();
-		postsToBeBackedUp.put(postID, p);
 		tmp.add(postID);
-		postsByAuthor.compute(author, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
-		return postID;
+
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.writeLock().lock();
+				postsToBeBackedUp.put(postID, p);
+				postsByAuthor.compute(author, (k, v) -> v == null ? tmp : Stream.concat(tmp.stream(), v.stream()).collect(Collectors.toSet()));
+				return postID;
+			}
+			finally { dataAccessLock.writeLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> handleBlog(final String author)
@@ -112,17 +138,26 @@ public class PostMap extends Storage implements PostStorage
 		Set<String> r = new HashSet<>();
 		Set<Integer> postsIDs = null;
 
-		postsIDs = postsByAuthor.get(author);
-		if (postsIDs == null) return r;
-		postsIDs.forEach(id ->
+		try
 		{
-			Post p = postsBackedUp.get(id);
-			if (p == null) p = postsToBeBackedUp.get(id);
-			if (p == null) throw new IllegalStateException("Posts' storage is not in a consistent state."); // should never happen
-			r.add(postToPreview(p));
-		});
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				postsIDs = postsByAuthor.get(author);
+				if (postsIDs == null) return r;
+				postsIDs.forEach(id ->
+				{
+					final Post p;
+					if ((p = getPostByID(id)) == null) throw new IllegalStateException("Posts' storage is not in a consistent state."); // should never happen
+					r.add(postToPreview(p));
+				});
 
-		return r;
+				return r;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public Set<String> handleShowFeed(final String username, final UserStorage users)
@@ -133,49 +168,73 @@ public class PostMap extends Storage implements PostStorage
 
 		Set<String> r = new HashSet<>();
 
-		users.handleListFollowing(username)
-			.stream()
-			.map(s -> new Gson().fromJson(s, JsonObject.class).get("username").getAsString())
-			.forEach(followingUsername ->
-				Optional.ofNullable(postsByAuthor.get(followingUsername)).orElseGet(HashSet<Integer>::new)
-				.forEach(id -> r.add(postToPreview(postsBackedUp.get(id))))
-			);
-
-		return r;
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				users.handleListFollowing(username)
+					.stream()
+					.map(s -> new Gson().fromJson(s, JsonObject.class).get("username").getAsString())
+					.forEach(followingUsername ->
+						Optional.ofNullable(postsByAuthor.get(followingUsername)).orElseGet(HashSet<Integer>::new)
+						.forEach(id -> r.add(postToPreview(getPostByID(id))))
+					);
+				return r;
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public String handleShowPost(final int id)
 	throws NoSuchPostException
 	{
-		Post p = null;
+		final Post p;
 
-		p = postsBackedUp.get(id);
-		if (p == null) p = postsToBeBackedUp.get(id);
-		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
-
-		return postToShow(p);
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((p = getPostByID(id)) == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
+				return postToShow(p);
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
-	public synchronized boolean handleDeletePost(final String username, final int id)
+	public boolean handleDeletePost(final String username, final int id)
 	throws NoSuchPostException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 
-		Post p = null;
+		final Post p;
 
-		p = postsBackedUp.get(id);
-		if (p == null) p = postsToBeBackedUp.get(id);
-		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
-
-		if (username.equals(p.getAuthor()))
+		try
 		{
-			postsToBeBackedUp.remove(p.getID());
-			postsBackedUp.remove(p.getID());
-			postsByAuthor.get(p.getAuthor()).remove(p.getID());
-			flush = true;
-			return true;
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.writeLock().lock();
+				if ((p = getPostByID(id)) == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
+
+				if (username.equals(p.getAuthor()))
+				{
+					postsToBeBackedUp.remove(p.getID());
+					postsBackedUp.remove(p.getID());
+					postsByAuthor.get(p.getAuthor()).remove(p.getID());
+					flush = true;
+					return true;
+				}
+				return false;
+			}
+			finally { dataAccessLock.writeLock().unlock(); }
 		}
-		else return false;
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public boolean handleRewin(final String username, final UserStorage users, final int id)
@@ -184,22 +243,29 @@ public class PostMap extends Storage implements PostStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
 
-		Post p = null;
+		final Post p;
 
-		p = postsBackedUp.get(id);
-		if (p == null) p = postsToBeBackedUp.get(id);
-		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
-
-		if (feedContainsPost(username, users, p))
+		try
 		{
-			if (p.addRewin(username))
+			backupLock.readLock().lock();
+			try
 			{
-				Set<Integer> tmp = new HashSet<>(); tmp.add(id);
-				postsByAuthor.compute(username, (k, v) -> v == null ? tmp : Stream.concat(v.stream(), tmp.stream()).collect(Collectors.toSet()));
-				return true;
+				dataAccessLock.writeLock().lock();
+				if ((p = getPostByID(id)) == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
+				if (feedContainsPost(username, users, p))
+				{
+					if (p.addRewin(username))
+					{
+						Set<Integer> tmp = new HashSet<>(); tmp.add(id);
+						postsByAuthor.compute(username, (k, v) -> v == null ? tmp : Stream.concat(v.stream(), tmp.stream()).collect(Collectors.toSet()));
+						return true;
+					}
+				}
+				return false;
 			}
+			finally { dataAccessLock.writeLock().unlock(); }
 		}
-		return false;
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public void handleRate(final String username, final UserStorage users, final int id, final Vote vote)
@@ -208,15 +274,22 @@ public class PostMap extends Storage implements PostStorage
 		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
 
-		Post p = null;
+		final Post p;
 
-		p = postsBackedUp.get(id);
-		if (p == null) p = postsToBeBackedUp.get(id);
-		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((p = getPostByID(id)) == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
 
-		if (feedContainsPost(username, users, p))
-			p.addVote(username, vote);
-		else throw new InvalidVoteException("Post does not belong to specified user's feed.");
+				if (feedContainsPost(username, users, p)) p.addVote(username, vote);
+				else throw new InvalidVoteException("Post does not belong to specified user's feed.");
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
 	}
 
 	public void handleAddComment(final String author, final UserStorage users, final int id, final String contents)
@@ -226,26 +299,36 @@ public class PostMap extends Storage implements PostStorage
 		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
 		Objects.requireNonNull(contents, "Comment's contents" + NULL_PARAM_ERROR);
 
-		Post p = null;
+		final Post p;
 
-		p = postsBackedUp.get(id);
-		if (p == null) p = postsToBeBackedUp.get(id);
-		if (p == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
-
-		if (feedContainsPost(author, users, p))
+		try
 		{
-			p.addComment(author, contents);
-			return;
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				if ((p = getPostByID(id)) == null) throw new NoSuchPostException(INVALID_ID_ERROR + id);
+				if (feedContainsPost(author, users, p))
+				{
+					p.addComment(author, contents);
+					return;
+				}
+				else throw new InvalidCommentException("Post does not belong to specified user's feed.");
+			}
+			finally { dataAccessLock.readLock().unlock(); }
 		}
-		else throw new InvalidCommentException("Post does not belong to specified user's feed.");
+		finally { backupLock.readLock().unlock(); }
 	}
 
-	public void backupPostsImmutableData(final File backupPostsFile)
+	public void backupPosts(final File backupPostsImmutableDataFile, final File backupPostsMutableDataFile)
 	throws FileNotFoundException, IOException, NullPointerException
 	{
-		Objects.requireNonNull(backupPostsFile, "File" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(backupPostsImmutableDataFile, "File" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(backupPostsMutableDataFile, "File" + NULL_PARAM_ERROR);
 
-		ExclusionStrategy strat = new ExclusionStrategy()
+		ExclusionStrategy strat = null;
+
+		strat = new ExclusionStrategy()
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
@@ -260,38 +343,37 @@ public class PostMap extends Storage implements PostStorage
 			}
 		};
 
-		if (flush)
+		try
 		{
-			flush = false;
-			backupNonCached(strat, backupPostsFile, postsBackedUp);
+			backupLock.writeLock().lock();
+			if (flush)
+			{
+				flush = false;
+				backupNonCached(strat, backupPostsImmutableDataFile, postsBackedUp);
+			}
+			backupCached(strat, backupPostsImmutableDataFile, postsBackedUp, postsToBeBackedUp, flag);
+			postsToBeBackedUp = new HashMap<>();
+			flag = false;
+
+			backupNonCached(new ExclusionStrategy()
+			{
+				public boolean shouldSkipField(FieldAttributes f)
+				{
+					// skips everything but "id", "comments", "rewonBy", "upvotedBy", "downvotedBy", "iterations", "newVotes", "newCommentsBy"
+					// and "newCurators" fields specified inside RewinPost class.
+					return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("comments")
+							&& !f.getName().equals("rewonBy") && !f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy")
+							&& !f.getName().equals("iterations")  && !f.getName().equals("newVotes")
+							&& !f.getName().equals("newCommentsBy") && !f.getName().equals("newCurators");
+				}
+
+				public boolean shouldSkipClass(Class<?> clazz)
+				{
+					return false;
+				}
+			}, backupPostsMutableDataFile, postsBackedUp);
 		}
-
-		Map<Integer, Post> tmp = new HashMap<>(postsToBeBackedUp);
-		postsToBeBackedUp = new ConcurrentHashMap<>();
-		backupCached(strat, backupPostsFile, postsBackedUp, tmp, flag);
-		flag = false;
-	}
-
-	public void backupPostsMutableData(final File backupPostsMetadataFile)
-	throws FileNotFoundException, IOException, NullPointerException
-	{
-		Objects.requireNonNull(backupPostsMetadataFile, "File" + NULL_PARAM_ERROR);
-
-		backupNonCached(new ExclusionStrategy()
-		{
-			public boolean shouldSkipField(FieldAttributes f)
-			{
-				// skips everything but "id", "comments", "rewonBy", "upvotedBy", "downvotedBy" and "iterations" fields specified inside RewinPost class.
-				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("comments")
-						&& !f.getName().equals("rewonBy") && !f.getName().equals("upvotedBy") && !f.getName().equals("downvotedBy")
-						&& !f.getName().equals("iterations");
-			}
-
-			public boolean shouldSkipClass(Class<?> clazz)
-			{
-				return false;
-			}
-		}, backupPostsMetadataFile, postsBackedUp);
+		finally { backupLock.writeLock().unlock(); }
 	}
 
 	public static PostMap fromJSON(final File backupPostsFile, final File backupPostsMetadataFile, final UserStorage users)
@@ -374,7 +456,7 @@ public class PostMap extends Storage implements PostStorage
 			List<String> downvoters = new ArrayList<>();
 			List<String> commentAuthors = new ArrayList<>();
 			List<String> commentContents = new ArrayList<>();
-			for (int i = 0; i < 5; i++)
+			for (int i = 0; i < 9; i++)
 			{
 				name = reader.nextName();
 				switch (name)
@@ -491,5 +573,12 @@ public class PostMap extends Storage implements PostStorage
 		return String.format("{ \"%s\": \"%d\",\n\"%s\": \"%s\",\n\"%s\": \"%s\",\n\"%s\": \"%d\",\n\"%s\": \"%d\",\n\"%s\": [%s],\n\"%s\": [%s]}",
 				"id", p.getID(), "title", p.getTitle(), "contents", p.getContents(), "upvotes", p.getUpvotesNo(), "downvotes", p.getDownvotesNo(),
 				"rewonBy", String.join(", ", p.getRewinnersNames()), "comments", String.join(", ", p.getComments()));
+	}
+
+	private Post getPostByID(final int id)
+	{
+		Post p = postsBackedUp.get(id);
+		if (p == null) p = postsToBeBackedUp.get(id);
+		return p;
 	}
 }
