@@ -25,6 +25,8 @@ import java.util.stream.Stream;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.stream.JsonReader;
 
 import cryptography.Passwords;
@@ -585,6 +587,41 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		reader.endArray();
 		reader.close();
 		is.close();
+
+		is = new FileInputStream(followingFile);
+		reader = new JsonReader(new InputStreamReader(is));
+
+		reader.setLenient(true);
+		reader.beginArray();
+		while (reader.hasNext())
+		{
+			reader.beginObject();
+			String name = null;
+			String username = null;
+			JsonObject object = new JsonObject();
+			Gson generator = new Gson();
+			for (int i = 0; i < 2; i++)
+			{
+				name = reader.nextName();
+				if (name.equals("username")) username = reader.nextString();
+				else if (name.equals("transactions"))
+				{
+					reader.beginArray();
+					for (int j = 0; j < 2; j++)
+					{
+						name = reader.nextName();
+						if (name.equals("amount")) object.addProperty(name, reader.nextDouble());
+						else if (name.equals("timestamp")) object.addProperty(name, reader.nextString());
+					}
+					reader.endArray();
+					try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
+					catch (InvalidAmountException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+				}
+				else reader.skipValue();
+			}
+			reader.endObject();
+		}
+		reader.endArray();
 
 		for (User u: map.usersBackedUp.values())
 		{
