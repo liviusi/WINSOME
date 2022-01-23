@@ -1,15 +1,15 @@
 package server.post;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @brief Class used to represent a Post in WINSOME.
@@ -65,11 +65,11 @@ public class RewinPost extends Post
 	/** Set of the names of the users whom have downvoted this post. */
 	private Set<String> downvotedBy = null;
 	/** Queue of the comments this post has received. */
-	private Collection<Comment> comments = null;
+	private Queue<Comment> comments = null;
 
-	private AtomicInteger newVotes = new AtomicInteger(0);
-	private Map<String, Integer> newCommentsBy = new ConcurrentHashMap<>();
-	private Set<String> newCurators = ConcurrentHashMap.newKeySet();
+	private int newVotes = 0;
+	private Map<String, Integer> newCommentsBy = new HashMap<>();
+	private Set<String> newCurators = new HashSet<>();
 	private int iterations = 0;
 
 	/** Part of the exception message when an attempt is made to submit a post with an empty title. */
@@ -151,15 +151,14 @@ public class RewinPost extends Post
 		iterations++;
 
 		double tmp = 0;
-		int newVotesNo = newVotes.get();
 		for (Integer cp : newCommentsBy.values()) tmp += (2 / (1 + Math.pow(Math.E, -(cp - 1))));
-		Set<String> curators = new HashSet<>(); curators.addAll(newCurators);
+		Set<String> curators = newCurators;
 
-		newCommentsBy = new ConcurrentHashMap<>();
-		newCurators = ConcurrentHashMap.newKeySet();
-		newVotes = new AtomicInteger(0);
+		newCommentsBy = new HashMap<>();
+		newCurators = new HashSet<>();
 
-		double result = (Math.log(Math.max(newVotesNo, 0) + 1) + Math.log(tmp + 1)) / iterations;
+		double result = (Math.log(Math.max(newVotes, 0) + 1) + Math.log(tmp + 1)) / iterations;
+		newVotes = 0;
 
 		return new GainAndCurators(result, curators);
 	}
@@ -170,7 +169,7 @@ public class RewinPost extends Post
 		return rewonBy.add(Objects.requireNonNull(username, "User" + NULL_ERROR));
 	}
 
-	public void addComment(final String username, final String contents)
+	public synchronized void addComment(final String username, final String contents)
 	throws InvalidCommentException, NullPointerException
 	{
 		if (Objects.requireNonNull(username, "Username" + NULL_ERROR).equals(author))
@@ -183,7 +182,7 @@ public class RewinPost extends Post
 		newCurators.add(username);
 	}
 
-	public void addVote(final String username, final Vote vote)
+	public synchronized void addVote(final String username, final Vote vote)
 	throws InvalidVoteException, NullPointerException
 	{
 		Objects.requireNonNull(vote, "Vote" + NULL_ERROR);
@@ -195,13 +194,13 @@ public class RewinPost extends Post
 		if (vote.equals(Vote.UPVOTE))
 		{
 			upvotedBy.add(username);
-			newVotes.incrementAndGet();
+			newVotes++;
 			newCurators.add(username);
 		}
 		else if (vote.equals(Vote.DOWNVOTE))
 		{
 			downvotedBy.add(username);
-			newVotes.decrementAndGet();
+			newVotes--;
 		}
 
 		return;

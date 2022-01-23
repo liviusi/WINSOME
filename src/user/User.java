@@ -69,7 +69,7 @@ public class User
 	public Set<Tag> getTags()
 	{
 		Set<Tag> r = new HashSet<>();
-		synchronized(this) { r.addAll(tags); }
+		r.addAll(tags);
 		return r;
 	}
 
@@ -94,7 +94,6 @@ public class User
 	public void addTransaction(Transaction t)
 	throws InvalidAmountException
 	{
-		// System.out.println(username + " " + t.amount + " " + t.instant.toString());
 		synchronized(this) { transactions.add(t); }
 	}
 
@@ -111,12 +110,11 @@ public class User
 	{
 		Objects.requireNonNull(clientID, "Client" + NULL_ERROR);
 		Objects.requireNonNull(hashPassword, "Hashed password" + NULL_ERROR);
+		if (!hashPassword.equals(this.hashPassword)) throw new WrongCredentialsException("Wrong password!");
+
 		synchronized(this)
 		{
-			if (this.loggedIn != null)
-				throw new InvalidLoginException("User has already logged in.");
-			if (!hashPassword.equals(this.hashPassword))
-				throw new WrongCredentialsException("Wrong password!");
+			if (this.loggedIn != null) throw new InvalidLoginException("User has already logged in.");
 			this.loggedIn = clientID;
 		}
 	}
