@@ -430,7 +430,7 @@ public class ServerMain
 											try
 											{
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-												answerConstructor.write((username + "is already following " + followed).getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + " is already following " + followed).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
