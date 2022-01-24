@@ -41,7 +41,7 @@ public class RewardsTask implements Runnable
 	 * @throws IOException refer to MulticastSocket(int port).
 	 * @throws NullPointerException if any parameter is null.
 	 */
-	public RewardsTask(UserStorage users, PostStorage posts, final ServerConfiguration configuration)
+	public RewardsTask(final ServerConfiguration configuration, UserStorage users, PostStorage posts)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(configuration, "Configuration cannot be null.");

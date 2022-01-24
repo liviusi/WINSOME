@@ -624,7 +624,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 						}
 						reader.endObject();
 						if (flag) try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
-						catch (InvalidAmountException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+						catch (NullPointerException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 					}
 					reader.endArray();
 				}

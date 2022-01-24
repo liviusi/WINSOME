@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -58,61 +59,79 @@ import user.SameUserException;
 import user.WrongCredentialsException;
 
 /**
- * @brief Server file.
+ * @brief Server main file.
  * @author Giacomo Trapani
  */
-
 public class ServerMain
 {
-	public static final String USERS_FILENAME = "./storage/users.json";
+	/** Default size for ByteBuffers. */
 	private static final int BUFFERSIZE = 1024;
+	/** Part of the error message when NPE is thrown. */
+	private static final String NULL_ERROR = " cannot be null.";
+	/** Used to store multicast address and port as a byte array. */
 	private static byte[] multicastInfoBytes;
 
+	/** Used to group together all the information needed for a thread to be dispatched to handle a certain client's request. */
 	private static class SetElement
 	{
+		/** Channel denoting the client. */
 		final SocketChannel client;
+		/** OP_CODE of the operation to be performed on this client. */
 		final int operation;
+		/** ByteBuffer to be used when handling this request. */
 		final ByteBuffer buffer;
 
+		/**
+		 * @brief Default constructor.
+		 * @param client cannot be null.
+		 * @param operation must be either OP_READ or OP_WRITE.
+		 * @param buffer cannot be null.
+		 * @throws IllegalArgumentException if operation is neither OP_READ or OP_WRITE.
+		 * @throws NullPointerException if any parameter is null
+		 */
 		public SetElement(final SocketChannel client, final int operation, final ByteBuffer buffer)
 		throws IllegalArgumentException
 		{
 			if (operation != SelectionKey.OP_READ && operation != SelectionKey.OP_WRITE)
 				throw new IllegalArgumentException("Operation specified is not valid. Only OP_READ and OP_WRITE are permitted.");
-			this.client = client;
+			this.client = Objects.requireNonNull(client, "Client" + NULL_ERROR);
 			this.operation = operation;
-			this.buffer = buffer;
+			this.buffer = Objects.requireNonNull(buffer, "Buffer" + NULL_ERROR);
 		}
 	}
 
+	/** Used to group together the whole logic for a task to handle a certain client's request. */
 	private static class RequestHandler implements Runnable
 	{
+		/** Pointer to the set of clients to be registered for next select's iteration. */
 		private Set<SetElement> toBeRegistered = null;
+		/** Pointer to selector. It is used to wake it up after handling the request. */
 		private Selector selector = null;
+		/** Pointer to the key denoting this client. */
 		private SelectionKey key = null;
+		/** Pointer to user storage. */
 		private UserStorage users = null;
+		/** Pointer to post storage. */
 		private PostStorage posts = null;
+		/** Pointer to the map storing the couples (client, username they have logged in with). */
 		private Map<SocketChannel, String> loggedInClients = null;
+		/** Pointer to the RMI callbackService. */
 		private RMICallbackService callbackService = null;
 
-		private static final String LOGIN_SUCCESS = " has now logged in";
 		private static final String CLIENT_ALREADY_LOGGED_IN = "Client has already logged in";
-		private static final String LOGOUT_SUCCESS = " has now logged out";
-		private static final String FOLLOW_SUCCESS = " is now following ";
-		private static final String UNFOLLOW_SUCCESS = " has now stopped following ";
-		private static final String NOT_FOLLOWING = " is not following ";
 
+		/** Default constructor. */
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
 				final SelectionKey key, final UserStorage users, final PostStorage posts, Map<SocketChannel, String> loggedInClients,
 				final RMICallbackService callbackService)
 		{
-			this.toBeRegistered = toBeRegistered;
-			this.selector = selector;
-			this.key = key;
-			this.users = users;
-			this.posts = posts;
-			this.loggedInClients = loggedInClients;
-			this.callbackService = callbackService;
+			this.toBeRegistered = Objects.requireNonNull(toBeRegistered, "Set" + NULL_ERROR);
+			this.selector = Objects.requireNonNull(selector, "Selector" + NULL_ERROR);
+			this.key = Objects.requireNonNull(key, "Key" + NULL_ERROR);
+			this.users = Objects.requireNonNull(users, "Users storage" + NULL_ERROR);
+			this.posts = Objects.requireNonNull(posts, "Posts storage" + NULL_ERROR);
+			this.loggedInClients = Objects.requireNonNull(loggedInClients, "Logged in clients" + NULL_ERROR);
+			this.callbackService = Objects.requireNonNull(callbackService, "Callback service" + NULL_ERROR);
 		}
 
 		public void run()
@@ -212,7 +231,7 @@ public class ServerMain
 										try
 										{
 											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-											answerConstructor.write((username + LOGIN_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+											answerConstructor.write((username + " has now logged in.").getBytes(StandardCharsets.US_ASCII));
 										}
 										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										loggedInClients.put(client, username);
@@ -330,7 +349,7 @@ public class ServerMain
 									try
 									{
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-										answerConstructor.write((username + LOGOUT_SUCCESS).getBytes(StandardCharsets.US_ASCII));
+										answerConstructor.write((username + " has now logged out").getBytes(StandardCharsets.US_ASCII));
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 									loggedInClients.remove(client);
@@ -450,7 +469,7 @@ public class ServerMain
 											try
 											{
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-												answerConstructor.write((username + FOLLOW_SUCCESS + followed).getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + " is now following " + followed).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
@@ -493,7 +512,7 @@ public class ServerMain
 											try
 											{
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
-												answerConstructor.write((username + NOT_FOLLOWING + unfollowed).getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + " is not following " + unfollowed).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
@@ -503,7 +522,7 @@ public class ServerMain
 											try
 											{
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
-												answerConstructor.write((username + UNFOLLOW_SUCCESS + unfollowed).getBytes(StandardCharsets.US_ASCII));
+												answerConstructor.write((username + " has now stopped following " + unfollowed).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
@@ -946,6 +965,15 @@ public class ServerMain
 			}
 		}
 
+		/**
+		 * @brief Method used to convert a set to a byte array following the syntax CONCAT(LENGTH, ITEM) with ITEM denoting the item of the set
+		 * and LENGTH its length when converted to byte array.
+		 * @param <T> type of the elements of the set.
+		 * @param set set to be converted.
+		 * @param dst BAOS the result will be appended to.
+		 * @return size of the buffer.
+		 * @throws IOException if I/O error(s) occur(s).
+		 */
 		private static <T> int SetToByteArray(Set<T> set, ByteArrayOutputStream dst)
 		throws IOException
 		{
@@ -964,6 +992,13 @@ public class ServerMain
 			return size;
 		}
 
+		/**
+		 * @brief Puts a byte array inside a ByteBuffer doubling its size every time this operation is not successful.
+		 * @param dst buffer the array is to be put in.
+		 * @param buffersize buffer's initial size.
+		 * @param src byte array to be put inside the buffer.
+		 * @return new buffer's size.
+		 */
 		private static int putByteArray(ByteBuffer dst, int buffersize, byte[] src)
 		{
 			ByteBuffer tmp = null;
@@ -1001,6 +1036,7 @@ public class ServerMain
 			return newSize;
 		}
 
+		/** Handles syntax errors. */
 		private static void syntaxErrorHandler(ByteArrayOutputStream baos)
 		{
 			try
@@ -1011,6 +1047,7 @@ public class ServerMain
 			catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 		}
 
+		/** Handles username's errors. */
 		private static void invalidUsernameHandler(ByteArrayOutputStream baos, final String username)
 		{
 			try
@@ -1022,21 +1059,27 @@ public class ServerMain
 		}
 	}
 
+	/** Class used to wrap together the whole logic for a task to send a message to a client. */
 	private static class MessageDispatcher implements Runnable
 	{
+		/** Pointer to the set of clients to be registered for next select's iteration. */
 		private Set<SetElement> toBeRegistered = null;
+		/** Pointer to selector. It is used to wake it up after handling the request. */
 		private Selector selector = null;
+		/** Pointer to the key denoting this client. */
 		private SelectionKey key = null;
+		/** Pointer to user storage. */
 		private UserStorage users = null;
+		/** Pointer to the map storing the couples (client, username they have logged in with). */
 		private Map<SocketChannel, String> loggedInClients = null;
 
 		public MessageDispatcher(final Set<SetElement> toBeRegistered, final Selector selector,
 				final SelectionKey key, final UserStorage users, Map<SocketChannel, String> loggedInClients)
 		{
-			this.toBeRegistered = toBeRegistered;
-			this.selector = selector;
-			this.key = key;
-			this.loggedInClients = loggedInClients;
+			this.toBeRegistered = Objects.requireNonNull(toBeRegistered, "Set" + NULL_ERROR);
+			this.selector = Objects.requireNonNull(selector, "Selector" + NULL_ERROR);
+			this.key = Objects.requireNonNull(key, "Key" + NULL_ERROR);
+			this.loggedInClients = Objects.requireNonNull(loggedInClients, "Logged in clients" + NULL_ERROR);
 		}
 
 		public void run()
@@ -1108,7 +1151,7 @@ public class ServerMain
 
 		// setting up rmi:
 		UserStorage users = null;
-		try { users = UserMap.fromJSON(new File("./storage/users.json"), new File("./storage/following.json"), new File("./storage/transactions.json")); }
+		try { users = UserMap.fromJSON(new File(configuration.userStorageFilename), new File(configuration.followingStorageFilename), new File(configuration.transactionsFilename)); }
 		catch (FileNotFoundException | IllegalArchiveException e) { users = new UserMap(); }
 		catch (IOException e)
 		{
@@ -1117,7 +1160,7 @@ public class ServerMain
 			System.exit(1);
 		}
 		PostStorage posts = null;
-		try { posts = PostMap.fromJSON(new File("./storage/posts.json"), new File("./storage/posts-interactions.json")); }
+		try { posts = PostMap.fromJSON(new File(configuration.postStorageFilename), new File(configuration.postsInteractionsStorageFilename)); }
 		catch (IOException | IllegalArchiveException | InvalidGeneratorException e)
 		{
 			posts = new PostMap();
@@ -1126,7 +1169,7 @@ public class ServerMain
 		try  { callbackService = new RMICallbackService(); }
 		catch (RemoteException e)
 		{
-			System.err.println("Fatal error occurred while setting up RMI callbacks.");
+			System.err.println("Fatal error occurred while setting up RMI callbacks: now aborting...");
 			e.printStackTrace();
 			System.exit(1);
 		}
@@ -1135,10 +1178,10 @@ public class ServerMain
 		Thread backup = new Thread(new BackupTask(configuration, users, posts));
 		backup.start();
 		Thread rewards = null;
-		try { rewards = new Thread(new RewardsTask(users, posts, configuration)); }
+		try { rewards = new Thread(new RewardsTask(configuration, users, posts)); }
 		catch (IOException e)
 		{
-			System.err.println("Fatal error occurred while setting up multicast.");
+			System.err.println("Fatal error occurred while setting up multicast: now aborting...");
 			e.printStackTrace();
 			System.exit(1);
 		}
@@ -1159,7 +1202,8 @@ public class ServerMain
 		}
 		catch (IOException e)
 		{
-			System.err.printf("Fatal I/O error occurred while setting up selector: now aborting...\n%s\n", e.getMessage());
+			System.err.println("Fatal I/O error occurred while setting up selector: now aborting...");
+			e.printStackTrace();
 			System.exit(1);
 		}
 		Set<SetElement> toBeRegistered = ConcurrentHashMap.newKeySet();
@@ -1184,11 +1228,19 @@ public class ServerMain
 					if (c instanceof ServerSocketChannel)
 					{
 						try { c.close(); }
-						catch (IOException e) { System.err.printf("I/O error occurred during shutdown:\n%s\n.", e.getMessage()); }
+						catch (IOException e)
+						{
+							System.err.println("I/O error occurred during shutdown:");
+							e.printStackTrace();
+						}
 					}
 				}
 				try { selectorHandler.close(); }
-				catch (IOException e) { System.err.printf("I/O error occurred during shutdown:\n%s\n.", e.getMessage()); }
+				catch (IOException e)
+				{
+					System.err.println("I/O error occurred during shutdown:");
+					e.printStackTrace();
+				}
 				threadPool.shutdown();
 				try
 				{
@@ -1215,7 +1267,8 @@ public class ServerMain
 			try { r = selector.select(); }
 			catch (IOException e)
 			{
-				System.err.printf("I/O error occurred during select:\n%s\n", e.getMessage());
+				System.err.println("Fatal I/O error occurred during select: now aborting...");
+				e.printStackTrace();
 				System.exit(1);
 			}
 			catch (ClosedSelectorException e) { break; }
