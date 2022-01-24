@@ -2,7 +2,7 @@ package api;
 
 /**
  * @brief A ResponseCode is issued by the server after handling a client's request.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public enum ResponseCode
 {

@@ -9,7 +9,7 @@ import java.util.Objects;
 
 /**
  * @brief Utility class used to handle every communication by the server and from the server.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class Communication
 {

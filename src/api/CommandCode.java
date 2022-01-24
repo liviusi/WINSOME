@@ -3,7 +3,7 @@ package api;
 /**
  * @brief Enum used to represent valid commands, which are expected to be sent from the client and properly
  * handled by the server.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public enum CommandCode
 {

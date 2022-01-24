@@ -6,8 +6,7 @@ import java.util.Set;
 
 /**
  * @brief Utility class used when parsing server's responses. Every response has a structure of this kind:
- * "CODE\r\nBODY" with CODE representing the response code and BODY its body (refer to the documentation for
- * further explanations of this syntax).
+ * "CODE\r\nBODY" with CODE representing the response code and BODY its body.
  * @author Giacomo Trapani
  */
 public class Response<T>
