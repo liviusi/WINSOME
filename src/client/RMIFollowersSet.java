@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @brief Class implementation of RMI callbacks interface using a concurrent hashset.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class RMIFollowersSet extends UnicastRemoteObject implements RMIFollowers
 {
