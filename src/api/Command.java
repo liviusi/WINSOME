@@ -22,6 +22,10 @@ import user.TagListTooLongException;
 
 /**
  * @brief Utility class used to send properly parsed Command-Line commands from the client to the server.
+ * The following notation will be used throughout the whole file:
+ * - user(x) will be used to denote the user (on WINSOME) with username x, it will also be used as a shorthand for the couple (username, interests(username));
+ * - POST(x) will be used to denote the state x is after a certain method's successful execution;
+ * - PREV(x) will be used to denote the state x is before a certain method's execution.
  * @author Giacomo Trapani
  */
 
@@ -76,10 +80,15 @@ public class Command
 	 * @param username cannot be null.
 	 * @param password cannot be null.
 	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param jsonMulticastInfo cannot be null.
 	 * @param verbose toggled on if response is to be printed out.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
-	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveMessage, receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
+	 * @modifies
+	 *  	- dest: POST(dest) = PREV(dest) U { followedBy(user(username)) } with { followedBy(x) } denoting the set of all the users x is currently followed by.
+	 *  	- jsonMulticastInfo: CONCAT(POST(jsonMulticastInfo), info) with info denoting the String describing the multicast coordinates written following json syntax.
 	 */
 	public static int login(String username, String password, SocketChannel server, Set<String> dest, StringBuilder jsonMulticastInfo, boolean verbose)
 	throws IOException, NullPointerException
@@ -87,6 +96,8 @@ public class Command
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(password, "Password" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server channel" + NULL_ERROR);
+		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+		Objects.requireNonNull(jsonMulticastInfo, "StringBuilder" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
@@ -98,10 +109,10 @@ public class Command
 		Response<Set<String>> responsePullFollowers;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Login setup", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\"}", COMMAND, CommandCode.LOGINSETUP.description, USERNAME, username)
 				.getBytes(StandardCharsets.US_ASCII);
-		// Login setup:<username>
-		Communication.send(server, buffer, bytes);
+		Communication.send(server, buffer, bytes); // asking for salt
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1; // retrieving salt
@@ -115,16 +126,16 @@ public class Command
 		saltDecoded = r.body;
 		hashedPassword = Passwords.hashPassword(password.getBytes(StandardCharsets.US_ASCII), Passwords.decodeSalt(saltDecoded));
 		buffer.flip(); buffer.clear();
+		// { "command": "Login", "username": "<username>", "hashedpassword": "<hashed password base64 encoded>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LOGINATTEMPT.description, USERNAME,
 				username, HASHEDPASSWORD, hashedPassword).getBytes(StandardCharsets.US_ASCII);
-		// Login:<username>:<hash(password, salt)>
-		Communication.send(server, buffer, bytes);
+		Communication.send(server, buffer, bytes); // asking for client to login
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
 		if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
 		r = Response.parseAnswer(sb.toString());
 		if (r == null) throw new IOException(RESPONSE_FAILURE);
-		if (r.code != ResponseCode.OK)
+		if (r.code != ResponseCode.OK) // client could not login
 		{
 			printIf(r, verbose);
 			return 1;
@@ -132,7 +143,8 @@ public class Command
 		buffer.flip(); buffer.clear();
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.PULLFOLLOWERS.description, USERNAME, username)
 				.getBytes(StandardCharsets.US_ASCII);
-		Communication.send(server, buffer, bytes);
+		// { "command": "Pull followers", "username": "<username>" }
+		Communication.send(server, buffer, bytes); // asking for initial followers' list
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1; // retrieving followers
 		responsePullFollowers = Response.parseAnswer(baos.toByteArray());
@@ -150,8 +162,9 @@ public class Command
 		{
 			for (String s: responsePullFollowers.body) dest.add(s);
 			buffer.flip(); buffer.clear();
+			// { "command": "Retrieve multicast" }
 			bytes = String.format("{ \"%s\": \"%s\" }", COMMAND, CommandCode.RETRIEVEMULTICAST.description).getBytes(StandardCharsets.US_ASCII);
-			Communication.send(server, buffer, bytes);
+			Communication.send(server, buffer, bytes); // asking for multicast coordinates to be sent
 			buffer.flip(); buffer.clear();
 			sb = new StringBuilder();
 			if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
@@ -178,7 +191,7 @@ public class Command
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
-	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
 	public static int logout(String username, SocketChannel server, boolean verbose)
@@ -193,8 +206,8 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Logout", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LOGOUT.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
-		// Logout:<username>
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -213,11 +226,13 @@ public class Command
 	 * @brief Lists out all the users on WINSOME sharing at least a common interest with the caller.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
+	 * @param dest cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
-	 * @param dest cannot be null, it will contain the usernames of the users sharing at least a common interest with username and their interests.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
-	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
+	 * @modifies: dest: POST(dest) = PREV(dest) U { commonInterestsWith(user(username)) } with { commonInterestsWith(x) } denoting the set of each and every user
+	 * sharing an interest (a.k.a. a tag) with x.
 	 */
 	public static int listUsers(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
@@ -232,6 +247,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "List users", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LISTUSERS.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -256,10 +272,11 @@ public class Command
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
-	 * @param dest cannot be null, it will contain the usernames of the users username is currently following and their interests.
+	 * @param dest cannot be null.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
-	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = PREV(dest) U { following(user(username)) } with { following(x) } denoting the set of the users x is currently following.
 	 */
 	public static int listFollowing(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
@@ -274,6 +291,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "List following", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.LISTFOLLOWING.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -301,7 +319,7 @@ public class Command
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
-	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
 	public static int followUser(String follower, String followed, SocketChannel server, boolean verbose)
@@ -317,6 +335,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Follow", "follower": "<follower>", "followed": "<followed>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.FOLLOWUSER.description, FOLLOWER,
 				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -333,6 +352,16 @@ public class Command
 		}
 	}
 
+	/**
+	 * @brief Stops following a user on WINSOME.
+	 * @param follower cannot be null.
+	 * @param followed cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int unfollowUser(final String follower, final String followed, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -346,6 +375,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Unfollow", "follower": "<follower>", "followed": "<followed>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.UNFOLLOWUSER.description, FOLLOWER,
 				follower, FOLLOWED, followed).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -362,6 +392,17 @@ public class Command
 		}
 	}
 
+	/**
+	 * @brief Retrieves all posts by given author on WINSOME.
+	 * @param author cannot be null.
+	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = PREV(dest) U { postsBy(user(username)) } with { postsBy(x) } denoting the set of each and every post written by x.
+	 */
 	public static int viewBlog(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -375,6 +416,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Blog", "username": "<author>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.VIEWBLOG.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -394,6 +436,19 @@ public class Command
 		return 0;
 	}
 
+	/**
+	 * @brief Uploads post with given parameters on WINSOME.
+	 * @param author cannot be null.
+	 * @param title cannot be null.
+	 * @param contents cannot be null.
+	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = CONCAT(PREV(dest), ID(p)) with ID(x) denoting the ID of the post x and p denoting the post newly created on WINSOME.
+	 */
 	public static int createPost(final String author, final String title, final String contents, final SocketChannel server, StringBuilder dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -409,6 +464,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Post", "author": "<author>", "title": "<title>", "contents": "<contents>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.CREATEPOST.description,
 				AUTHOR, author, TITLE, title, CONTENTS, contents).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -429,10 +485,22 @@ public class Command
 		}
 	}
 
-	public static int showFeed(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
+	/**
+	 * @brief Retrieves the feed of the given user. Let x be a user, a feed is defined as the union of the set of each and every post the author of which
+	 * is an user x is following and (the set of each and every post) has been rewon by an user x is following.
+	 * @param author cannot be null.
+	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = PREV(dest) U feed(user(username)) with feed defined as before.
+	 */
+	public static int showFeed(final String username, final SocketChannel server, Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
-		Objects.requireNonNull(author, "Username" + NULL_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
 
@@ -442,7 +510,8 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
-		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.SHOWFEED.description, USERNAME, author).getBytes(StandardCharsets.US_ASCII);
+		// { "command": "Show feed", "username": "<username>" }
+		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.SHOWFEED.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		if (Communication.receiveBytes(server, buffer, baos) == -1) return -1;
@@ -461,11 +530,23 @@ public class Command
 		return 0;
 	}
 
-	public static int showPost(String username, int id, SocketChannel server, StringBuilder dest, boolean verbose)
+	/**
+	 * @brief Shows a post given its unique identifier.
+	 * @param username cannot be null.
+	 * @param postID identifier of the post.
+	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies: dest: POST(dest) = CONCAT(PREV(dest), postToJson(postID)) with postToJson(x) the post with identifier x written following json syntax.
+	 */
+	public static int showPost(String username, int postID, SocketChannel server, StringBuilder dest, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
-		Objects.requireNonNull(dest, "Destination" + NULL_ERROR);
+		Objects.requireNonNull(dest, "StringBuilder" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
@@ -474,8 +555,9 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Show post", "username", "<username>", "postid": "<postID>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.SHOWPOST.description, USERNAME,
-				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
+				username, POSTID, postID).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -494,7 +576,17 @@ public class Command
 		}
 	}
 
-	public static int deletePost(String username, int id, SocketChannel server, boolean verbose)
+	/**
+	 * @brief Deletes a post given its identifier.
+	 * @param username cannot be null.
+	 * @param postID identifier of the post.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
+	public static int deletePost(String username, int postID, SocketChannel server, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -506,8 +598,9 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Delete post", "username": "<username>", "postid": "<postID>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.DELETEPOST.description, USERNAME,
-				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
+				username, POSTID, postID).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -522,7 +615,18 @@ public class Command
 		}
 	}
 
-	public static int rewinPost(String username, int id, SocketChannel server, boolean verbose)
+	/**
+	 * @brief Rewins a post given its identifier. CAVEAT: a rewin does not generate a new post, it is but a symbolic link between a user
+	 * and a post by another user.
+	 * @param username cannot be null.
+	 * @param postID identifier of the post.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
+	public static int rewinPost(String username, int postID, SocketChannel server, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -534,8 +638,9 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Rewin", "username": "<username>", "postid": "<postID>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\" }", COMMAND, CommandCode.REWIN.description, USERNAME,
-				username, POSTID, id).getBytes(StandardCharsets.US_ASCII);
+				username, POSTID, postID).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
 		sb = new StringBuilder();
@@ -550,6 +655,17 @@ public class Command
 		}
 	}
 
+	/**
+	 * @brief Rates a post given its identifier (it may either correspond to upvoting or downvoting).
+	 * @param voter cannot be null.
+	 * @param postID identifier of the post.
+	 * @param vote vote to be cast.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int ratePost(final String voter, final int postID, final int vote, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -562,6 +678,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Rate", "username": "<voter>", "postid": "<postID>", "vote": "<vote>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\", \"%s\": \"%d\" }", COMMAND, CommandCode.RATE.description,
 				USERNAME, voter, POSTID, postID, "vote", vote).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -578,6 +695,17 @@ public class Command
 		}
 	}
 
+	/**
+	 * @brief Adds a comment to a post given its identifier.
+	 * @param author cannot be null.
+	 * @param postID identifier of the post.
+	 * @param contents cannot be null.
+	 * @param server cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 */
 	public static int addComment(final String author, final int postID, final String contents, final SocketChannel server, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -591,6 +719,7 @@ public class Command
 		StringBuilder sb = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Comment", "author": "<author>", "postid": "<postID>", "contents": "<contents>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\", \"%s\": \"%d\", \"%s\": \"%s\" }", COMMAND, CommandCode.COMMENT.description,
 				USERNAME, author, POSTID, postID, CONTENTS, contents).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
@@ -607,6 +736,18 @@ public class Command
 		}
 	}
 
+	/**
+	 * @brief Gets the whole transaction history of a given user.
+	 * @param username cannot be null.
+	 * @param server cannot be null.
+	 * @param dest cannot be null.
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = PREV(post) U { transactionsBy(user(username)) } with transactionsBy(x) denoting the set of each and every transaction
+	 * x is involved with.
+	 */
 	public static int getWallet(final String username, final SocketChannel server, final Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
@@ -620,6 +761,7 @@ public class Command
 		Response<Set<String>> r = null;
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Wallet", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.WALLET.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
@@ -639,12 +781,24 @@ public class Command
 		return 0;
 	}
 
+	/**
+	 * @brief Shows given users' WINCOINS converted to BTC.
+	 * @param username cannot be null.
+	 * @param server cannot be null.
+	 * @param dest cannot be null
+	 * @param verbose toggled on if any output is to be printed out.
+	 * @return 0 on success, 1 on failure, -1 if an error occurs.
+	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
+	 * @throws NullPointerException if any parameters are null.
+	 * @modifies dest: POST(dest) = CONCAT(PREV(dest), walletToBTC(user(username))) with walletToBTC denoting the function computing the conversion
+	 * from WINSOME to BTC.
+	 */
 	public static int getWalletInBitcoin(final String username, final SocketChannel server, final StringBuilder dest, final boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server" + NULL_ERROR);
-		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
+		Objects.requireNonNull(dest, "StringBuilder" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
@@ -652,6 +806,7 @@ public class Command
 		StringBuilder sb = new StringBuilder();
 
 		buffer.flip(); buffer.clear();
+		// { "command": "Wallet BTC", "username": "<username>" }
 		bytes = String.format("{ \"%s\": \"%s\", \"%s\": \"%s\" }", COMMAND, CommandCode.WALLETBTC.description, USERNAME, username).getBytes(StandardCharsets.US_ASCII);
 		Communication.send(server, buffer, bytes);
 		buffer.flip(); buffer.clear();
