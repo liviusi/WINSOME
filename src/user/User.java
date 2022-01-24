@@ -11,7 +11,7 @@ import java.util.Set;
 
 /**
  * @brief Class used to denote a user registered on WINSOME. This class is thread-safe.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class User
 {
@@ -27,6 +27,7 @@ public class User
 	private Set<Tag> tags = null;
 	/** Set of the usernames of the users this user is currently following. */
 	private Set<String> following = null;
+	/** List of the transactions this user has been involved in. */
 	private List<Transaction> transactions = null;
 
 	/** Maximum amount of tags to be accepted. */
@@ -84,6 +85,10 @@ public class User
 		return res;
 	}
 
+	/**
+	 * @brief Getter for the transactions this user has been involved with.
+	 * @return a copy of the transactions this user has been involved with.
+	 */
 	public List<Transaction> getTransactions()
 	{
 		List<Transaction> r = new ArrayList<>();
@@ -91,9 +96,10 @@ public class User
 		return r;
 	}
 
+	/** Adds a new transaction to this user. */
 	public void addTransaction(Transaction t)
-	throws InvalidAmountException
 	{
+		Objects.requireNonNull(t, "Transaction" + NULL_ERROR);
 		synchronized(this) { transactions.add(t); }
 	}
 
@@ -139,10 +145,10 @@ public class User
 
 	/**
 	 * @brief Has this user start following u.
-	 * @param u cannot be null.
-	 * @return true on success, false on failure. This function may fail if this user is already following
-	 * u or this user and u are the very same user.
+	 * @param u cannot be null, must be different from this.
+	 * @return true on success, false if this user is already following u.
 	 * @throws NullPointerException if u is null.
+	 * @throws SameUserException if this and u are the same user.
 	 */
 	public boolean follow(User u)
 	throws SameUserException, NullPointerException
@@ -161,8 +167,7 @@ public class User
 	/**
 	 * @brief Has this user stop following u.
 	 * @param u cannot be null.
-	 * @return true on success, false on failure. This function may fail if this user is not following
-	 * u or this user and u are the very same user.
+	 * @return true on success, false on failure i.e. if this user is not following u.
 	 * @throws NullPointerException if u is null.
 	 */
 	public boolean unfollow(User u)
@@ -200,6 +205,7 @@ public class User
 		return String.format("{ \"username\": \"%s\", \"tags\": [%s]", username, setToString(tags)) + "}";
 	}
 
+	/** Utility method used to convert a Set to a String. */
 	private <T> String setToString(Set<T> set)
 	{
 		Iterator<T> it = set.iterator();

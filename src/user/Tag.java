@@ -5,7 +5,7 @@ import java.util.Objects;
 
 /**
  * @brief Class used to identify a tag i.e. an interest expressed by a certain user.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class Tag
 {
