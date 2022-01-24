@@ -33,6 +33,8 @@ public class RewardsTask implements Runnable
 	/** Address for multicast. */
 	private final InetAddress multicastAddress;
 
+	private final double authorPercentage;
+
 	/**
 	 * @brief Default constructor.
 	 * @param users cannot be null.
@@ -52,6 +54,7 @@ public class RewardsTask implements Runnable
 		this.portNo = configuration.portNoMulticast;
 		this.multicastAddress = configuration.multicastAddress;
 		this.interval = configuration.rewardsInterval;
+		this.authorPercentage = configuration.rewardsAuthorPercentage;
 	}
 
 	public void run()
@@ -66,7 +69,7 @@ public class RewardsTask implements Runnable
 				socket.close();
 				return;
 			}
-			try { users.updateRewards(posts.calculateGains(), 70); }
+			try { users.updateRewards(posts.calculateGains(), authorPercentage); }
 			catch (NoSuchUserException | InvalidAmountException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // server is not in a consistent state
 
 			DatagramPacket message = new DatagramPacket(bytes, bytes.length, multicastAddress, portNo);

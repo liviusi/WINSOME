@@ -27,6 +27,7 @@ public class ServerConfiguration extends Configuration
 	private static final String POSTSSTORAGE_STRING = "POSTSSTORAGE";
 	private static final String POSTSINTERACTIONSSTORAGE_STRING = "POSTSINTERACTIONSSTORAGE";
 	private static final String REWARDSINTERVAL_STRING = "REWARDSINTERVAL";
+	private static final String REWARDSAUTHORPERCENTAGE_STRING = "REWARDSAUTHORPERCENTAGE";
 
 	/** Multicast address. */
 	public final InetAddress multicastAddress;
@@ -54,6 +55,7 @@ public class ServerConfiguration extends Configuration
 	public final String postsInteractionsStorageFilename;
 	/** Interval (in msec) to wait between rewards' periodic calculation. */
 	public final int rewardsInterval;
+	public final double rewardsAuthorPercentage;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -77,7 +79,7 @@ public class ServerConfiguration extends Configuration
 			properties.containsKey(TRANSACTIONSSTORAGE_STRING) && properties.containsKey(FOLLOWINGSTORAGE_STRING)
 			&& properties.containsKey(POSTSSTORAGE_STRING) && properties.containsKey(POSTSINTERACTIONSSTORAGE_STRING)
 			&& properties.containsKey(REWARDSINTERVAL_STRING) && properties.containsKey(MULTICASTADDRESS_STRING)
-			&& properties.containsKey(PORTNOMULTICAST_STRING))
+			&& properties.containsKey(PORTNOMULTICAST_STRING) && properties.containsKey(REWARDSAUTHORPERCENTAGE_STRING))
 		{
 			// validating multicast port number:
 			try { portNoMulticast = parsePortNo(properties.getProperty(PORTNOMULTICAST_STRING)); }
@@ -129,6 +131,12 @@ public class ServerConfiguration extends Configuration
 			{
 				rewardsInterval = Integer.parseInt(properties.getProperty(REWARDSINTERVAL_STRING));
 				if (rewardsInterval <= 0) throw new InvalidConfigException("Rewards' interval must be greater than zero.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			try
+			{
+				rewardsAuthorPercentage = Double.parseDouble(properties.getProperty(REWARDSAUTHORPERCENTAGE_STRING));
+				if (rewardsAuthorPercentage <= 0 || rewardsAuthorPercentage >= 100) throw new InvalidConfigException("Author's reward percentage must be in range ]0; 100[.");
 			}
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);
