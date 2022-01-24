@@ -16,7 +16,7 @@ import user.WrongCredentialsException;
 
 /**
  * @brief Interface to be implemented by an actual user storage class.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public interface UserStorage
 {

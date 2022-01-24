@@ -37,7 +37,7 @@ import server.post.Post.Vote;
 
 /**
  * @brief Post storage backed by a hashmap. This class is thread-safe.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class PostMap extends Storage implements PostStorage
 {
@@ -49,16 +49,20 @@ public class PostMap extends Storage implements PostStorage
 	private boolean flag = false;
 	/** Toggled on if a post has been deleted since the last backup. */
 	private boolean flush = false;
+	/** Maps an username to the IDs of each and every post they are the author of. */
 	private Map<String, Set<Integer>> postsByAuthor = null;
 
+	/** Used to allow for every method to run concurrently as long as a backup is not occurring. */
 	private ReentrantReadWriteLock backupLock = new ReentrantReadWriteLock(true);
+	/** Used to allow for every method not directly editing this class' fields to run concurrently. */
 	private ReentrantReadWriteLock dataAccessLock = new ReentrantReadWriteLock(true);
 
 	/** Part of the exception message when NPE is thrown. */
-	private static final String NULL_PARAM_ERROR = " cannot be null.";
+	private static final String NULL_ERROR = " cannot be null.";
 	/** Part of the exception message when no posts could be found for a certain id. */
 	private static final String INVALID_ID_ERROR = "There are no posts with id ";
 
+	/** Default constructor. */
 	public PostMap()
 	{
 		if (!Post.isIDGenerated())
@@ -70,6 +74,7 @@ public class PostMap extends Storage implements PostStorage
 		flag = false;
 	}
 
+	/** Default constructor starting from a certain value. */
 	public PostMap(int value)
 	throws InvalidGeneratorException
 	{
@@ -107,9 +112,9 @@ public class PostMap extends Storage implements PostStorage
 		Post p = null;
 		int postID = -1;
 		
-		p = new RewinPost(Objects.requireNonNull(author, "Author" + NULL_PARAM_ERROR),
-				Objects.requireNonNull(title, "Title" + NULL_PARAM_ERROR),
-				Objects.requireNonNull(contents, "Contents" + NULL_PARAM_ERROR));
+		p = new RewinPost(Objects.requireNonNull(author, "Author" + NULL_ERROR),
+				Objects.requireNonNull(title, "Title" + NULL_ERROR),
+				Objects.requireNonNull(contents, "Contents" + NULL_ERROR));
 		Set<Integer> tmp = new HashSet<>();
 
 		postID = p.getID();
@@ -133,7 +138,7 @@ public class PostMap extends Storage implements PostStorage
 	public Set<String> handleBlog(final String author)
 	throws NullPointerException
 	{
-		Objects.requireNonNull(author, "Author" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(author, "Author" + NULL_ERROR);
 
 		Set<String> r = new HashSet<>();
 		Set<Integer> postsIDs = null;
@@ -163,8 +168,8 @@ public class PostMap extends Storage implements PostStorage
 	public Set<String> handleShowFeed(final String username, final UserStorage users)
 	throws NoSuchUserException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
 
 		Set<String> r = new HashSet<>();
 
@@ -210,7 +215,7 @@ public class PostMap extends Storage implements PostStorage
 	public boolean handleDeletePost(final String username, final int id)
 	throws NoSuchPostException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 
 		final Post p;
 
@@ -240,8 +245,8 @@ public class PostMap extends Storage implements PostStorage
 	public boolean handleRewin(final String username, final UserStorage users, final int id)
 	throws NoSuchPostException, NullPointerException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
 
 		final Post p;
 
@@ -271,8 +276,8 @@ public class PostMap extends Storage implements PostStorage
 	public void handleRate(final String username, final UserStorage users, final int id, final Vote vote)
 	throws NoSuchPostException, InvalidVoteException
 	{
-		Objects.requireNonNull(username, "Username" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(username, "Username" + NULL_ERROR);
+		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
 
 		final Post p;
 
@@ -295,9 +300,9 @@ public class PostMap extends Storage implements PostStorage
 	public void handleAddComment(final String author, final UserStorage users, final int id, final String contents)
 	throws InvalidCommentException, NoSuchPostException, NullPointerException
 	{
-		Objects.requireNonNull(author, "Author" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(users, "User storage" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(contents, "Comment's contents" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(author, "Author" + NULL_ERROR);
+		Objects.requireNonNull(users, "User storage" + NULL_ERROR);
+		Objects.requireNonNull(contents, "Comment's contents" + NULL_ERROR);
 
 		final Post p;
 
@@ -323,16 +328,16 @@ public class PostMap extends Storage implements PostStorage
 	public void backupPosts(final File backupPostsImmutableDataFile, final File backupPostsMutableDataFile)
 	throws FileNotFoundException, IOException, NullPointerException
 	{
-		Objects.requireNonNull(backupPostsImmutableDataFile, "File" + NULL_PARAM_ERROR);
-		Objects.requireNonNull(backupPostsMutableDataFile, "File" + NULL_PARAM_ERROR);
+		Objects.requireNonNull(backupPostsImmutableDataFile, "File" + NULL_ERROR);
+		Objects.requireNonNull(backupPostsMutableDataFile, "File" + NULL_ERROR);
 
 		ExclusionStrategy strat = null;
 
-		strat = new ExclusionStrategy()
+		strat = new ExclusionStrategy() // CAVEAT: this strategy excludes every non-immutable field
 		{
 			public boolean shouldSkipField(FieldAttributes f)
 			{
-				// skips "comments", "rewonBy", "upvotedBy" and "downvotedBy" fields specified inside RewinPost class.
+				// skips everything but "id", "author", "title" and "contents" fields specified inside RewinPost class.
 				return f.getDeclaringClass() == RewinPost.class && !f.getName().equals("id") && !f.getName().equals("author") &&
 					!f.getName().equals("title") && !f.getName().equals("contents");
 			}
@@ -345,17 +350,19 @@ public class PostMap extends Storage implements PostStorage
 
 		try
 		{
+			// No other methods are to be run while a backup is in progress.
 			backupLock.writeLock().lock();
-			if (flush)
+			if (flush) // overwrites cached copy of the storage to handle post deletion
 			{
 				flush = false;
 				backupNonCached(strat, backupPostsImmutableDataFile, postsBackedUp);
 			}
+			// "appends" new posts to the storage and adds them to the cache
 			backupCached(strat, backupPostsImmutableDataFile, postsBackedUp, postsToBeBackedUp, flag);
 			postsToBeBackedUp = new HashMap<>();
-			flag = false;
+			flag = false; // this is not the first backup anymore
 
-			//postsBackedUp.entrySet().forEach(e -> System.out.println(postToShow(e.getValue())));
+			// overwrites the file posts' mutable data is stored in
 			backupNonCached(new ExclusionStrategy()
 			{
 				public boolean shouldSkipField(FieldAttributes f)
@@ -377,13 +384,30 @@ public class PostMap extends Storage implements PostStorage
 		finally { backupLock.writeLock().unlock(); }
 	}
 
+	/**
+	 * @brief Recovers a PostMap given the two files used to backup the posts.
+	 * @param backupPostsFile cannot be null, must be a valid backup.
+	 * @param backupPostsMetadataFile cannot be null, must be a valid backup.
+	 * @return the recovered PostMap.
+	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
+	 * or cannot be opened for any other reason.
+	 * @throws IOException if I/O error(s) occur.
+	 * @throws NullPointerException if any of the files is null.
+	 * @throws IllegalArchiveException if the files do not make up a legal archive.
+	 * @throws InvalidGeneratorException if the generator is not in a consistent state.
+	 */
 	public static PostMap fromJSON(final File backupPostsFile, final File backupPostsMetadataFile)
 	throws FileNotFoundException, IOException, IllegalArchiveException, InvalidGeneratorException
 	{
+		Objects.requireNonNull(backupPostsFile, "File" + NULL_ERROR);
+		Objects.requireNonNull(backupPostsMetadataFile, "File" + NULL_ERROR);
+
 		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
 
+		/** Maps an ID to the JsonObject which will be used to restore a RewinPost with said ID. */
 		Map<Integer, JsonObject> parsedPosts = new HashMap<>();
 
+		// recovering posts' immutable data (a.k.a. id, author, title and contents)
 		InputStream is = new FileInputStream(backupPostsFile);
 		JsonReader reader = new JsonReader(new InputStreamReader(is));
 
@@ -432,6 +456,7 @@ public class PostMap extends Storage implements PostStorage
 
 		// for (JsonObject o: parsedPosts.values()) System.out.println(o);
 
+		// recovering posts' mutable data
 		is = new FileInputStream(backupPostsMetadataFile);
 		reader = new JsonReader(new InputStreamReader(is));
 
@@ -444,11 +469,17 @@ public class PostMap extends Storage implements PostStorage
 			int id = -1;
 			int newVotes = -1;
 			int iterations = -1;
+			/** Array of comments (Objects). */
 			JsonArray comments = new JsonArray();
+			/** Array of rewinners (String). */
 			JsonArray rewinners = new JsonArray();
+			/** Array of upvoters (String). */
 			JsonArray upvoters = new JsonArray();
+			/** Array of downvoters (String). */
 			JsonArray downvoters = new JsonArray();
+			/** Maps a username (String) to the number of new comments it has made (Integer). */
 			JsonObject newCommentsBy = new JsonObject();
+			/** Array of new curators (String). */
 			JsonArray newCurators = new JsonArray();
 			for (int i = 0; i < 9; i++)
 			{
@@ -535,6 +566,7 @@ public class PostMap extends Storage implements PostStorage
 			reader.endObject();
 			try
 			{
+				// filling up the JsonObject with all the fields.
 				parsedPosts.get(id).add("rewonBy", rewinners);
 				parsedPosts.get(id).add("upvotedBy", upvoters);
 				parsedPosts.get(id).add("downvotedBy", downvoters);
@@ -550,10 +582,12 @@ public class PostMap extends Storage implements PostStorage
 		reader.close();
 		is.close();
 
-		for (JsonObject o: parsedPosts.values()) System.out.println(o);
+		// for (JsonObject o: parsedPosts.values()) System.out.println(o);
 
-		PostMap map = new PostMap(parsedPosts.size());
-		map.flag = true;
+		PostMap map = new PostMap(parsedPosts.size()); // Posts with IDs up to parsedPosts' size have already been generated.
+		map.flag = true; // instantiated from a backup
+		
+		/** Used to handle the recovery of the parsed RewinPosts. */
 		Gson generator = new Gson();
 		for (Entry<Integer, JsonObject> entry: parsedPosts.entrySet())
 		{
@@ -565,6 +599,7 @@ public class PostMap extends Storage implements PostStorage
 		return map;
 	}
 
+	/** Method used to check whether a post belongs to a certain user's feed. */
 	private boolean feedContainsPost(final String username, final UserStorage users, final Post p)
 	{
 		Integer ID = p.getID();
@@ -590,11 +625,13 @@ public class PostMap extends Storage implements PostStorage
 		return result;
 	}
 
+	/** Method used to return the preview of a Post. */
 	private static String postToPreview(final Post p)
 	{
 		return String.format("{ \"%s\": \"%d\",\n \"%s\": \"%s\",\n \"%s\": \"%s\"}", "id", p.getID(), "author", p.getAuthor(), "title", p.getTitle());
 	}
 
+	/** Method used to return the shown version of a Post. */
 	private static String postToShow(final Post p)
 	{
 		return String.format("{ \"%s\": \"%d\",\n\"%s\": \"%s\",\n\"%s\": \"%s\",\n\"%s\": \"%d\",\n\"%s\": \"%d\",\n\"%s\": [%s],\n\"%s\": [%s]}",
@@ -602,6 +639,7 @@ public class PostMap extends Storage implements PostStorage
 				"rewonBy", String.join(", ", p.getRewinnersNames()), "comments", String.join(", ", p.getComments()));
 	}
 
+	/** Method used to recover a Post given its ID. It may return null. */
 	private Post getPostByID(final int id)
 	{
 		Post p = postsBackedUp.get(id);

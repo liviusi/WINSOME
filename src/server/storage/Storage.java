@@ -10,22 +10,42 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Scanner;
-import java.util.Set;
 
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+/**
+ * @brief Abstract class with utility methods for storage classes.
+ * @author Giacomo Trapani.
+ */
 abstract class Storage
 {
-	static final int BUFFERSIZE = 1024;
+	private static final int BUFFERSIZE = 1024;
+	private static final String NULL_ERROR = " cannot be null";
 
+	/**
+	 * @brief Creates a backup of a data structure and stores it inside given file which will be overwritten.
+	 * @param <K> type of the keys of the data Map.
+	 * @param <V> type of the values of the data Map.
+	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
+	 * @param fileToBeStoredIn cannot be null.
+	 * @param data cannot be null.
+	 * @throws IOException if I/O error(s) occur(s).
+	 * @throws NullPointerException if any parameter is null.
+	 */
 	public static <K, V> void backupNonCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Map<K, V> data)
-	throws IOException
+	throws IOException, NullPointerException
 	{
+		Objects.requireNonNull(strategy, "Exclusion strategy" + NULL_ERROR);
+		Objects.requireNonNull(fileToBeStoredIn, "File" + NULL_ERROR);
+		Objects.requireNonNull(data, "Map" + NULL_ERROR);
+
 		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(strategy).create();
 
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
@@ -57,9 +77,22 @@ abstract class Storage
 		}
 	}
 
-	public static <T> void backupNonCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Set<T> data)
-	throws IOException
+	/**
+	 * @brief Creates a backup of a data structure and stores it inside given file which will be overwritten.
+	 * @param <T> type of the items of the data Collection.
+	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
+	 * @param fileToBeStoredIn cannot be null.
+	 * @param data cannot be null.
+	 * @throws IOException if I/O error(s) occur(s).
+	 * @throws NullPointerException if any parameter is null.
+	 */
+	public static <T> void backupNonCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Collection<T> data)
+	throws IOException, NullPointerException
 	{
+		Objects.requireNonNull(strategy, "Exclusion strategy" + NULL_ERROR);
+		Objects.requireNonNull(fileToBeStoredIn, "File" + NULL_ERROR);
+		Objects.requireNonNull(data, "Map" + NULL_ERROR);
+
 		if (data.isEmpty()) return;
 
 		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(strategy).create();
@@ -93,10 +126,30 @@ abstract class Storage
 		}
 	}
 
+	/**
+	 * @brief Creates a backup of a data structure and appends it to given file.
+	 * @param <K> type of the keys of the data Maps.
+	 * @param <V> type of the values of the data Maps.
+	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
+	 * @param fileToBeStoredIn cannot be null.
+	 * @param backedUpData cannot be null.
+	 * @param toBeBackedUpData cannot be null.
+	 * @param firstBackupAndNonEmptyStorage should be toggled on if and only if this is the first backup and the storage is non-empty.
+	 * @throws IOException if I/O error(s) occur(s).
+	 * @throws NullPointerException if any parameter is null.
+	 * @modifies
+	 *  	backedUpData: POST(backedUpData) = PREV(backedUpData) U toBeBackedUpData.
+	 *  	toBeBackedUpData: POST(toBeBackedUpData) = EMPTY_MAP with EMPTY_MAP denoting an empty map.
+	 */
 	public static <K, V> void backupCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Map<K, V> backedUpData,
 			Map<K,V> toBeBackedUpData, boolean firstBackupAndNonEmptyStorage)
 	throws IOException
 	{
+		Objects.requireNonNull(strategy, "Exclusion strategy" + NULL_ERROR);
+		Objects.requireNonNull(fileToBeStoredIn, "File" + NULL_ERROR);
+		Objects.requireNonNull(backedUpData, "Map" + NULL_ERROR);
+		Objects.requireNonNull(toBeBackedUpData, "Map" + NULL_ERROR);
+
 		if (toBeBackedUpData.isEmpty()) return;
 
 		Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(strategy).create();
@@ -170,10 +223,10 @@ abstract class Storage
 
 	/**
 	 * @brief Writes a single character onto the channel.
-	 * @param channel pointer to the channel to write on
-	 * @param c character to write
+	 * @param channel pointer to the channel to write on.
+	 * @param c character to write.
 	 * @throws IOException if I/O error(s) occur.
-	 * @author Matteo Loporchio
+	 * @author Matteo Loporchio.
 	 */
 	private static void writeChar(FileChannel channel, char c)
 	throws IOException

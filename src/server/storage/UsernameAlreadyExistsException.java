@@ -2,7 +2,7 @@ package server.storage;
 
 /**
  * @brief Exception to be thrown when a username is already taken.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class UsernameAlreadyExistsException extends Exception
 {

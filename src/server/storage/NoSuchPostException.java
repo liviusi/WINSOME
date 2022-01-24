@@ -2,7 +2,7 @@ package server.storage;
 
 /**
  * @brief Exception to be thrown when an attempt is made to look for a non-existing post.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class NoSuchPostException extends Exception
 {

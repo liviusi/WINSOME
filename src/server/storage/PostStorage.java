@@ -15,10 +15,11 @@ import server.post.Post.Vote;
 
 /**
  * @brief Interface to be implemented by an actual post storage class.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public interface PostStorage
 {
+	/** Handles the computation of the rewards to be handed out. */
 	public Map<String, GainAndCurators> calculateGains();
 
 	/**
@@ -118,6 +119,16 @@ public interface PostStorage
 	public void handleAddComment(final String author, final UserStorage users, final int id, final String contents)
 	throws InvalidCommentException, NoSuchPostException, NullPointerException;
 
+	/**
+	 * @brief Backs up posts splitting the data between two files: one will contain their immutable data, the other
+	 * the mutable one.
+	 * @param backupPostsImmutableDataFile cannot be null.
+	 * @param backupPostsMutableDataFile cannot be null.
+	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
+	 * or cannot be opened for any other reason.
+	 * @throws IOException if I/O error(s) occur.
+	 * @throws NullPointerException if file is null.
+	 */
 	public void backupPosts(final File backupPostsImmutableDataFile, final File backupPostsMutableDataFile)
 	throws FileNotFoundException, IOException, NullPointerException;
 }

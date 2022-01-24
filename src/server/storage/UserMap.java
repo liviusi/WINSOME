@@ -35,7 +35,7 @@ import user.*;
 
 /**
  * @brief User storage backed by a hashmap. This class is thread-safe.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class UserMap extends Storage implements UserRMIStorage, UserStorage
 {
@@ -50,7 +50,9 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	/** Maps a user to the set of users currently following it. */
 	private Map<User, Set<User>> followersMap = null;
 
+	/** Used to allow for every method to run concurrently as long as a backup is not occurring. */
 	private ReentrantReadWriteLock backupLock = new ReentrantReadWriteLock(true);
+	/** Used to allow for every method not directly editing this class' fields to run concurrently. */
 	private ReentrantReadWriteLock dataAccessLock = new ReentrantReadWriteLock(true);
 
 	/** Empty string. */
@@ -471,14 +473,14 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	}
 
 	/**
-	 * @brief Instantiates UserMap given a backup of its users and one of their follows both written according to json syntax.
+	 * @brief Instantiates UserMap given a backup of its users, one of their follows and one of their transactions all written according to json syntax.
 	 * @param usersFile cannot be null, must be a valid user backup.
 	 * @param followingFile cannot be null, must be a valid backup of users' follows.
 	 * @return Instantiated map on success.
 	 * @throws FileNotFoundException FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
 	 * or cannot be opened for any other reason.
 	 * @throws IOException if I/O error(s) occur.
-	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow json syntax or it does not
+	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow json syntax or
 	 * this class' IR).
 	 */
 	public static UserMap fromJSON(final File usersFile, final File followingFile, final File transactionsFile)
