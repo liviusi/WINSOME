@@ -11,6 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import client.RMIFollowers;
 
+/**
+ * @brief Class implementing RMI callbacks.
+ * @author Giacomo Trapani.
+ */
 public class RMICallbackService extends UnicastRemoteObject implements RMICallback
 {
 	private Map<RMIFollowers, String> clients = null;
@@ -38,7 +42,7 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 	}
 
 	/**
-	 * @brief Notifies clients and registers new follower.
+	 * @brief Notifies client and registers new follower.
 	 * @param follower cannot be null.
 	 * @param followed cannot be null.
 	 * @throws NullPointerException if any parameter is null.
@@ -56,6 +60,7 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 				RMIFollowers c = e.getKey();
 				try { c.registerNewFollower(follower); }
 				catch (RemoteException clientDisconnected) { toDelete.add(c); }
+				break;
 			}
 		}
 		for (RMIFollowers c: toDelete)
@@ -75,6 +80,7 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 				RMIFollowers c = e.getKey();
 				try { c.removeFollower(follower); }
 				catch (RemoteException clientDisconnected) { toDelete.add(c); }
+				break;
 			}
 		}
 		for (RMIFollowers c: toDelete)

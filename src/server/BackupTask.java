@@ -9,24 +9,27 @@ import server.storage.PostStorage;
 import server.storage.UserStorage;
 
 /**
- * @brief Utility class used to group together the whole backup logic.
- * @author Giacomo Trapani
+ * @brief Utility class used to group together the whole backup logic as a single task.
+ * @author Giacomo Trapani.
  */
 public class BackupTask implements Runnable
 {
 	/** Milliseconds to be spent sleeping between backups. */
 	public static final int SLEEPINGTIME = 500;
 
-	/** Users' backup file */
+	/** Users' backup file. */
 	private final File usersFile;
-	/** Users' follows backup file */
+	/** Users' follows' backup file. */
 	private final File followingFile;
-	private final File transactionsFile = new File("./storage/transactions.json");
-	/** Pointer to user storage */
+	/** Users' transactions' backup file. */
+	private final File transactionsFile;
+	/** Pointer to User storage. */
 	private final UserStorage users;
-
+	/** Pointer to Post storage. */
 	private final PostStorage posts;
+	/** Posts' immutable data backup file. */
 	private final File postsImmutableFile;
+	/** Posts' mutable data backup file. */
 	private final File postsReactionsFile;
 
 	/** Part of the exception message when NPE is thrown. */
@@ -47,6 +50,7 @@ public class BackupTask implements Runnable
 		Objects.requireNonNull(posts, "Post storage" + NULL_ERROR);
 		this.usersFile = new File(configuration.userStorageFilename);
 		this.followingFile = new File(configuration.followingStorageFilename);
+		this.transactionsFile = new File(configuration.transactionsFilename);
 		this.postsImmutableFile = new File(configuration.postStorageFilename);
 		this.postsReactionsFile = new File(configuration.postsInteractionsStorageFilename);
 		this.users = users;

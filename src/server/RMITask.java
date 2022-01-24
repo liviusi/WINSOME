@@ -12,7 +12,7 @@ import server.storage.UserMap;
 import server.storage.UserRMIStorage;
 
 /**
- * @brief Utility class used to group together the whole RMI logic.
+ * @brief Utility class used to group together the whole RMI logic as a single task.
  * @author Giacomo Trapani
  */
 public class RMITask implements Runnable
@@ -74,9 +74,7 @@ public class RMITask implements Runnable
 			System.exit(1);
 		}
 		System.out.println("RMI setup complete.");
-		/**
-		 * This thread needs not to die before deallocating the resources used for RMI.
-		 */
+		/** This thread needs not to die before deallocating the resources used for RMI. */
 		while (true)
 		{
 			try { Thread.sleep(TIMEOUT); }
