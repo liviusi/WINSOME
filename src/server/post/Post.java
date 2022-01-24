@@ -7,11 +7,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @brief Abstract class defining a post in WINSOME.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public abstract class Post
 {
-	/** Enum used to upvote and downvote a certain post. */
+	/** Enum used to denote either an upvote or a downvote to a certain post. */
 	public static enum Vote
 	{
 		UPVOTE(1),
@@ -50,17 +50,25 @@ public abstract class Post
 		}
 	}
 
+	/**
+	 * Container class for the couple (gain, curators). A user x is defined a curator of another user y if and only if it
+	 * has either commented or upvoted a post by x recently.
+	*/
 	public static class GainAndCurators
 	{
+		/** Amount of WINCOINS involved. */
 		public final double gain;
+		/** Usernames of each and every curator. */
 		private final Set<String> curators;
 
+		/** Default constructor. */
 		public GainAndCurators(double gain, Set<String> curators)
 		{
 			this.curators = curators;
 			this.gain = gain;
 		}
 
+		/** Retrieves the set of curators. */
 		public Set<String> getCurators()
 		{
 			Set<String> r = new HashSet<>();
@@ -129,6 +137,7 @@ public abstract class Post
 	/** Getter for this post's number of downvotes. */
 	public abstract int getDownvotesNo();
 
+	/** Getter for this post's gain and curators as a couple. */
 	public abstract GainAndCurators getGainAndCurators();
 
 	/**

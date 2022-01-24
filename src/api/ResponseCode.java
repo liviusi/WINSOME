@@ -14,7 +14,6 @@ public enum ResponseCode
 
 	/** Used to represent the code as a string. */
 	private String description = null;
-	
 
 	/**
 	 * @brief Private constructor used to initialize a ResponseCode.

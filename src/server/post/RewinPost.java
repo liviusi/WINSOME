@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * @brief Class used to represent a Post in WINSOME.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class RewinPost extends Post
 {
@@ -67,9 +67,13 @@ public class RewinPost extends Post
 	/** Queue of the comments this post has received. */
 	private Queue<Comment> comments = new ConcurrentLinkedQueue<Comment>();
 
+	/** Weighted sum of upvotes and downvotes received recently. An upvote is valued 1, a downvote -1. */
 	private int newVotes = 0;
+	/** Maps a username to the number of new comments by it, with new denoting those received recently. */
 	private Map<String, Integer> newCommentsBy = new HashMap<>();
+	/** Collects the usernames of each and every user who's now become a curator for this post. */
 	private Set<String> newCurators = new HashSet<>();
+	/** Number of iterations of the Gain formula this post has been run against. */
 	private int iterations = 0;
 
 	/** Part of the exception message when an attempt is made to submit a post with an empty title. */
@@ -126,6 +130,7 @@ public class RewinPost extends Post
 	public List<String> getComments()
 	{
 		List<String> res = new ArrayList<>();
+		// recovering the comments this way is legit because comments is a concurrent data structure.
 		comments.forEach(c -> res.add(c.toString()));
 		return res;
 	}
@@ -140,6 +145,7 @@ public class RewinPost extends Post
 		return downvotedBy.size();
 	}
 
+	// synchronized is required to avoid having the post in a non-consistent state.
 	public synchronized GainAndCurators getGainAndCurators()
 	{
 		Objects.requireNonNull("Curators" + NULL_ERROR);
@@ -150,10 +156,12 @@ public class RewinPost extends Post
 		for (Integer cp : newCommentsBy.values()) tmp += (2 / (1 + Math.pow(Math.E, -(cp - 1))));
 		Set<String> curators = newCurators;
 
+		// computing gain ratio formula
+		double result = (Math.log(Math.max(newVotes, 0) + 1) + Math.log(tmp + 1)) / iterations;
+
+		// resetting params
 		newCommentsBy = new HashMap<>();
 		newCurators = new HashSet<>();
-
-		double result = (Math.log(Math.max(newVotes, 0) + 1) + Math.log(tmp + 1)) / iterations;
 		newVotes = 0;
 
 		return new GainAndCurators(result, curators);
@@ -162,9 +170,11 @@ public class RewinPost extends Post
 	public boolean addRewin(final String username)
 	throws NullPointerException
 	{
+		// rewonBy is a concurrent data structure
 		return rewonBy.add(Objects.requireNonNull(username, "User" + NULL_ERROR));
 	}
 
+	// synchronized is required to avoid having a post in a non-consistent state as multiple data structures are to be modified
 	public synchronized void addComment(final String username, final String contents)
 	throws InvalidCommentException, NullPointerException
 	{
@@ -178,6 +188,7 @@ public class RewinPost extends Post
 		newCurators.add(username);
 	}
 
+	// synchronized is required to avoid having a post in a non-consistent state as multiple data structures are to be modified
 	public synchronized void addVote(final String username, final Vote vote)
 	throws InvalidVoteException, NullPointerException
 	{

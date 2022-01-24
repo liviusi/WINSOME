@@ -2,7 +2,7 @@ package server.post;
 
 /**
  * @brief Exception to be thrown when an attempt is made to submit an invalid comment.
- * @author Giacomo Trapani
+ * @author Giacomo Trapani.
  */
 public class InvalidCommentException extends Exception
 {

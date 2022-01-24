@@ -9,7 +9,6 @@ import java.rmi.RemoteException;
  */
 public interface RMIFollowers extends Remote
 {
-
 	/**
 	 * @brief Registers new follower.
 	 * @param follower cannot be null.

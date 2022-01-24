@@ -19,7 +19,7 @@ import com.google.gson.ExclusionStrategy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-public abstract class Storage
+abstract class Storage
 {
 	static final int BUFFERSIZE = 1024;
 
