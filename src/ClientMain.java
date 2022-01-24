@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.MulticastSocket;
 import java.nio.channels.SocketChannel;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -10,8 +11,11 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,6 +24,8 @@ import com.google.gson.JsonSyntaxException;
 
 import api.Command;
 import api.Colors;
+import client.MulticastInfo;
+import client.MulticastWorker;
 import client.RMIFollowersSet;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
@@ -131,6 +137,57 @@ public class ClientMain
 		}
 	}
 
+	private static class ShutdownHook implements Runnable
+	{
+		private final Scanner scannerHandler;
+		private final SocketChannel channelHandler;
+		private final Thread multicastWorkerHandler;
+		private final RMICallback callbackHandler;
+		private final RMIFollowersSet callbackObjectHandler;
+
+		public ShutdownHook(final Scanner scannerHandler, final SocketChannel channelHandler, final Thread multicastWorkerHandler,
+					RMICallback callbackHandler, RMIFollowersSet callbackObjectHandler)
+		{
+			this.scannerHandler = scannerHandler;
+			this.channelHandler = channelHandler;
+			this.multicastWorkerHandler = multicastWorkerHandler;
+			this.callbackHandler = callbackHandler;
+			this.callbackObjectHandler = callbackObjectHandler;
+		}
+
+		public void run()
+		{
+			System.out.println(Colors.ANSI_CYAN + "Client is now freeing resources..." + Colors.ANSI_RESET);
+			try { scannerHandler.close(); }
+			catch (NullPointerException ignored) { }
+			System.out.println(1);
+			try { channelHandler.close(); }
+			catch (IOException ignored) { }
+			catch (NullPointerException ignored) { }
+			System.out.println(2);
+			try
+			{
+				multicastWorkerHandler.interrupt();
+				try { multicastWorkerHandler.join(500); }
+				catch (InterruptedException ignored) { }
+				System.out.println(2.5);
+			}
+			catch (NullPointerException ignored) { }
+			System.out.println(3);
+			try
+			{
+				callbackHandler.unregisterForCallback(callbackObjectHandler);
+				System.out.println(3.5);
+				UnicastRemoteObject.unexportObject(callbackObjectHandler, true);
+				System.out.println(4);
+			}
+			catch (RemoteException ignored) { }
+			catch (NullPointerException ignored) { }
+			return;
+		}
+	}
+
+
 	/** ERROR MESSAGES */
 
 	private static final String SERVER_DISCONNECT = Colors.ANSI_RED + "Server has forcibly reset the connection." + Colors.ANSI_RESET;
@@ -219,40 +276,32 @@ public class ClientMain
 		}
 		System.out.println(Colors.ANSI_CYAN + "Client is now running..." + Colors.ANSI_RESET);
 
-		// Local variables are to be (re-)defined as final to be handled in shutdown hook
-		final Scanner scanner = new Scanner(System.in);
-		final RMICallback callbackHandler = callback;
-		final RMIFollowersSet callbackObjectHandler = callbackObject;
-		final SocketChannel channelHandler = channel;
+		Thread multicastWorker = null;
 
+		final Scanner scanner = new Scanner(System.in);
 		String loggedInUsername = null;
 		int result = -1;
+		Queue<String> multicastMessages = new ConcurrentLinkedQueue<>();
+		AtomicBoolean isLogged = new AtomicBoolean(false);
 
-		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
-		{
-			public void run()
-			{
-				System.out.println(Colors.ANSI_CYAN + "Client is now freeing resources..." + Colors.ANSI_RESET);
-				try
-				{
-					callbackHandler.unregisterForCallback(callbackObjectHandler);
-					UnicastRemoteObject.unexportObject(callbackObjectHandler, true);
-				}
-				catch (RemoteException ignored) { }
-				catch (NullPointerException ignored) { }
-				scanner.close();
-				try { channelHandler.close(); }
-				catch (IOException ignored) { }
-			}
-		}));
+		Runtime.getRuntime().addShutdownHook(new Thread(new ShutdownHook(scanner, channel, multicastWorker, callback, callbackObject)));
 
 	loop:
 		while(true)
 		{
 			if (loggedInUsername == null) System.out.printf("> ");
-			else System.out.printf("%s> ", loggedInUsername);
+			else
+			{
+				String message = null;
+				{
+					if (!multicastMessages.isEmpty()) System.out.println("< " + Colors.ANSI_CYAN + "New messages received:" + Colors.ANSI_RESET);
+					while ((message = multicastMessages.poll()) != null) System.out.printf("\t%s\n", message);
+				}
+				System.out.printf("%s> ", loggedInUsername);
+			}
 
-			final String s = scanner.nextLine();
+			final String s;
+			s = scanner.nextLine();
 
 			Set<String> destSet = new HashSet<>();
 			StringBuilder destStringBuilder = new StringBuilder();
@@ -301,6 +350,7 @@ public class ClientMain
 								System.exit(1);
 							}
 							callbackObject = null;
+							isLogged.set(false);
 					}
 					continue loop;
 
@@ -594,12 +644,14 @@ public class ClientMain
 				}
 
 				case LOGIN:
+				{
 					if (len != 3)
 					{
 						System.err.println(INVALID_SYNTAX);
 						continue loop;
 					}
-					try { result = Command.login(command[1], command[2], channel, destSet, true); }
+					StringBuilder sb = new StringBuilder();
+					try { result = Command.login(command[1], command[2], channel, destSet, sb, true); }
 					catch (IOException e)
 					{
 						System.err.println(FATAL_IO);
@@ -610,6 +662,12 @@ public class ClientMain
 					{
 						System.err.println(NOT_LOGGED_IN);
 						continue loop;
+					}
+					MulticastInfo info = MulticastInfo.fromJSON(sb.toString());
+					if (info == null)
+					{
+						System.err.println(Colors.ANSI_RED + "Multicast address' info could not be parsed: now aborting..." + Colors.ANSI_RESET);
+						System.exit(1);
 					}
 					switch (result)
 					{
@@ -631,8 +689,27 @@ public class ClientMain
 								e.printStackTrace();
 								System.exit(1);
 							}
+							isLogged.set(true);
+							if (multicastWorker == null)
+							{
+								try 
+								{
+									MulticastSocket socket = new MulticastSocket(info.portNo);
+									socket.setSoTimeout(500);
+									socket.joinGroup(info.getAddress());
+									multicastWorker = new Thread(new MulticastWorker(socket, info.getAddress(), isLogged, multicastMessages));
+									multicastWorker.start();
+								}
+								catch (IOException e)
+								{
+									System.err.println(FATAL_IO);
+									System.exit(1);
+								}
+							}
+
 					}
 					continue loop;
+				}
 
 				case FOLLOW:
 					if (len != 2)
@@ -919,4 +996,5 @@ public class ClientMain
 			list.add(m.group(1).replace("\"", ""));
 		return list.toArray(new String[0]);
 	}
+
 }

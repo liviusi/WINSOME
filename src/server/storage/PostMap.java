@@ -355,6 +355,7 @@ public class PostMap extends Storage implements PostStorage
 			postsToBeBackedUp = new HashMap<>();
 			flag = false;
 
+			//postsBackedUp.entrySet().forEach(e -> System.out.println(postToShow(e.getValue())));
 			backupNonCached(new ExclusionStrategy()
 			{
 				public boolean shouldSkipField(FieldAttributes f)
@@ -376,13 +377,11 @@ public class PostMap extends Storage implements PostStorage
 		finally { backupLock.writeLock().unlock(); }
 	}
 
-	public static PostMap fromJSON(final File backupPostsFile, final File backupPostsMetadataFile, final UserStorage users)
+	public static PostMap fromJSON(final File backupPostsFile, final File backupPostsMetadataFile)
 	throws FileNotFoundException, IOException, IllegalArchiveException, InvalidGeneratorException
 	{
 		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
 
-		PostMap map = new PostMap();
-		map.flag = true;
 		Map<Integer, JsonObject> parsedPosts = new HashMap<>();
 
 		InputStream is = new FileInputStream(backupPostsFile);
@@ -403,6 +402,7 @@ public class PostMap extends Storage implements PostStorage
 					case "id":
 						id = reader.nextInt();
 						if (parsedPosts.putIfAbsent(id, new JsonObject()) != null) throw new IllegalArchiveException(INVALID_STORAGE);
+						parsedPosts.get(id).addProperty(name, id);
 						break;
 
 					case "author":
@@ -429,6 +429,8 @@ public class PostMap extends Storage implements PostStorage
 		reader.endArray();
 		reader.close();
 		is.close();
+
+		// for (JsonObject o: parsedPosts.values()) System.out.println(o);
 
 		is = new FileInputStream(backupPostsMetadataFile);
 		reader = new JsonReader(new InputStreamReader(is));
@@ -548,6 +550,10 @@ public class PostMap extends Storage implements PostStorage
 		reader.close();
 		is.close();
 
+		for (JsonObject o: parsedPosts.values()) System.out.println(o);
+
+		PostMap map = new PostMap(parsedPosts.size());
+		map.flag = true;
 		Gson generator = new Gson();
 		for (Entry<Integer, JsonObject> entry: parsedPosts.entrySet())
 		{

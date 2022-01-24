@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Properties;
 
 /**
@@ -12,7 +14,8 @@ import java.util.Properties;
 */
 public class ServerConfiguration extends Configuration
 {
-
+	private static final String MULTICASTADDRESS_STRING = "MULTICASTADDRESS";
+	private static final String PORTNOMULTICAST_STRING = "MULTICASTPORT";
 	private static final String SOCKETTIMEOUT_STRING = "SOCKETTIMEOUT";
 	private static final String COREPOOLSIZE_STRING = "COREPOOLSIZE";
 	private static final String MAXIMUMPOOLSIZE_STRING = "MAXIMUMPOOLSIZE";
@@ -20,9 +23,15 @@ public class ServerConfiguration extends Configuration
 	private static final String THREADPOOLTIMEOUT_STRING = "THREADPOOLTIMEOUT";
 	private static final String USERSTORAGE_STRING = "USERSTORAGE";
 	private static final String FOLLOWINGSTORAGE_STRING = "FOLLOWINGSTORAGE";
+	private static final String TRANSACTIONSSTORAGE_STRING = "TRANSACTIONSSTORAGE";
 	private static final String POSTSSTORAGE_STRING = "POSTSSTORAGE";
-	private static final String POSTSINTERACTIONSSTORAGE = "POSTSINTERACTIONSSTORAGE";
+	private static final String POSTSINTERACTIONSSTORAGE_STRING = "POSTSINTERACTIONSSTORAGE";
+	private static final String REWARDSINTERVAL_STRING = "REWARDSINTERVAL";
 
+	/** Multicast address. */
+	public final InetAddress multicastAddress;
+	/** Multicast port number. */
+	public final int portNoMulticast;
 	/** Socket timeout value. */
 	public final int socketTimeout;
 	/** Thread pool core pool size. */
@@ -37,9 +46,14 @@ public class ServerConfiguration extends Configuration
 	public final String userStorageFilename;
 	/** Filename of the file users and the users they are following are to be stored in. */
 	public final String followingStorageFilename;
+	/** Filename of the file users' transactions are to be stored in. */
+	public final String transactionsFilename;
 	/** Filename of the file posts are to be stored in. */
 	public final String postStorageFilename;
+	/** Filename of the file interactions with posts are to be stored in. */
 	public final String postsInteractionsStorageFilename;
+	/** Interval (in msec) to wait between rewards' periodic calculation. */
+	public final int rewardsInterval;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -60,9 +74,21 @@ public class ServerConfiguration extends Configuration
 		if (properties.containsKey(SOCKETTIMEOUT_STRING) && properties.containsKey(COREPOOLSIZE_STRING) &&
 			properties.containsKey(MAXIMUMPOOLSIZE_STRING) && properties.containsKey(KEEPALIVETIME_STRING) &&
 			properties.containsKey(THREADPOOLTIMEOUT_STRING) && properties.containsKey(USERSTORAGE_STRING) &&
-			properties.containsKey(FOLLOWINGSTORAGE_STRING) && properties.containsKey(POSTSSTORAGE_STRING) &&
-			properties.containsKey(POSTSINTERACTIONSSTORAGE))
+			properties.containsKey(TRANSACTIONSSTORAGE_STRING) && properties.containsKey(FOLLOWINGSTORAGE_STRING)
+			&& properties.containsKey(POSTSSTORAGE_STRING) && properties.containsKey(POSTSINTERACTIONSSTORAGE_STRING)
+			&& properties.containsKey(REWARDSINTERVAL_STRING) && properties.containsKey(MULTICASTADDRESS_STRING)
+			&& properties.containsKey(PORTNOMULTICAST_STRING))
 		{
+			// validating multicast port number:
+			try { portNoMulticast = parsePortNo(properties.getProperty(PORTNOMULTICAST_STRING)); }
+			catch (NumberFormatException e) { throw new InvalidConfigException("Specified port number is not a proper int."); }
+			catch (IllegalArgumentException e) { throw new InvalidConfigException("Specified port number is not valid."); }
+			if (portNoUDP == portNoMulticast || portNoRegistry == portNoMulticast || portNoTCP == portNoMulticast)
+				throw new InvalidConfigException("The same address can be used only once.");
+			// validating multicast address
+			try { multicastAddress = InetAddress.getByName(properties.getProperty(MULTICASTADDRESS_STRING)); }
+			catch (UnknownHostException e) { throw new InvalidConfigException(e.getMessage()); }
+			if (!multicastAddress.isMulticastAddress()) throw new InvalidConfigException("Specified multicast address is not in multicast range.");
 			// validating socket timeout:
 			try
 			{
@@ -99,14 +125,26 @@ public class ServerConfiguration extends Configuration
 				if (threadPoolTimeout <= 0) throw new InvalidConfigException("Thread pool timeout must be greater than zero.");
 			}
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			try
+			{
+				rewardsInterval = Integer.parseInt(properties.getProperty(REWARDSINTERVAL_STRING));
+				if (rewardsInterval <= 0) throw new InvalidConfigException("Rewards' interval must be greater than zero.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);
 			followingStorageFilename = properties.getProperty(FOLLOWINGSTORAGE_STRING);
+			transactionsFilename = properties.getProperty(TRANSACTIONSSTORAGE_STRING);
 			postStorageFilename = properties.getProperty(POSTSSTORAGE_STRING);
-			postsInteractionsStorageFilename = properties.getProperty(POSTSINTERACTIONSSTORAGE);
+			postsInteractionsStorageFilename = properties.getProperty(POSTSINTERACTIONSSTORAGE_STRING);
 			return;
 		}
 		else
 			throw new InvalidConfigException("Not all required fields have been specified; it is advised to check" +
 				" against the documentation and the example(s) available.");
+	}
+
+	public String getMulticastInfo()
+	{
+		return String.format("{ \"%s\": \"%s\", \"%s\": %d }", "address", multicastAddress.getHostName(), "portNo", portNoMulticast);
 	}
 }

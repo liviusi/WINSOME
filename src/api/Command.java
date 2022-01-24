@@ -81,7 +81,7 @@ public class Command
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
 	 */
-	public static int login(String username, String password, SocketChannel server, Set<String> dest, boolean verbose)
+	public static int login(String username, String password, SocketChannel server, Set<String> dest, StringBuilder jsonMulticastInfo, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
@@ -149,6 +149,20 @@ public class Command
 		if (r.code == ResponseCode.OK)
 		{
 			for (String s: responsePullFollowers.body) dest.add(s);
+			buffer.flip(); buffer.clear();
+			bytes = String.format("{ \"%s\": \"%s\" }", COMMAND, CommandCode.RETRIEVEMULTICAST.description).getBytes(StandardCharsets.US_ASCII);
+			Communication.send(server, buffer, bytes);
+			buffer.flip(); buffer.clear();
+			sb = new StringBuilder();
+			if (Communication.receiveMessage(server, buffer, sb) == -1) return -1;
+			r = Response.parseAnswer(sb.toString());
+			if (r == null) throw new IOException(RESPONSE_FAILURE);
+			if (r.code != ResponseCode.OK)
+			{
+				printIf(r, verbose);
+				return 1;
+			}
+			jsonMulticastInfo.append(r.body);
 			return 0;
 		}
 		else

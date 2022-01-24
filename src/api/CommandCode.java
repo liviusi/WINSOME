@@ -10,6 +10,7 @@ public enum CommandCode
 	LOGINSETUP("Login setup"),
 	LOGINATTEMPT("Login"),
 	PULLFOLLOWERS("Pull followers"),
+	RETRIEVEMULTICAST("Retrieve multicast"),
 	LOGOUT("Logout"),
 	LISTUSERS("List users"),
 	LISTFOLLOWING("List following"),

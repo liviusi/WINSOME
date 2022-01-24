@@ -65,7 +65,8 @@ import user.WrongCredentialsException;
 public class ServerMain
 {
 	public static final String USERS_FILENAME = "./storage/users.json";
-	public static final int BUFFERSIZE = 1024;
+	private static final int BUFFERSIZE = 1024;
+	private static byte[] multicastInfoBytes;
 
 	private static class SetElement
 	{
@@ -294,6 +295,15 @@ public class ServerMain
 								}
 							}
 						}
+					}
+					else if (elem.getAsString().equals(CommandCode.RETRIEVEMULTICAST.description))
+					{
+						try
+						{
+							answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
+							answerConstructor.write(multicastInfoBytes);
+						}
+						catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 					}
 					else if (elem.getAsString().equals(CommandCode.LOGOUT.description))
 					{
@@ -1094,10 +1104,11 @@ public class ServerMain
 			e.printStackTrace();
 			System.exit(1);
 		}
+		multicastInfoBytes = configuration.getMulticastInfo().getBytes(StandardCharsets.US_ASCII);
 
 		// setting up rmi:
 		UserStorage users = null;
-		try { users = UserMap.fromJSON(new File("./storage/users.json"), new File("./storage/following.json")); }
+		try { users = UserMap.fromJSON(new File("./storage/users.json"), new File("./storage/following.json"), new File("./storage/transactions.json")); }
 		catch (FileNotFoundException | IllegalArchiveException e) { users = new UserMap(); }
 		catch (IOException e)
 		{
@@ -1106,7 +1117,7 @@ public class ServerMain
 			System.exit(1);
 		}
 		PostStorage posts = null;
-		try { posts = PostMap.fromJSON(new File("./storage/posts.json"), new File("./storage/posts-interactions.json"), users); }
+		try { posts = PostMap.fromJSON(new File("./storage/posts.json"), new File("./storage/posts-interactions.json")); }
 		catch (IOException | IllegalArchiveException | InvalidGeneratorException e)
 		{
 			posts = new PostMap();
@@ -1116,14 +1127,23 @@ public class ServerMain
 		catch (RemoteException e)
 		{
 			System.err.println("Fatal error occurred while setting up RMI callbacks.");
+			e.printStackTrace();
 			System.exit(1);
 		}
 		Thread rmi = new Thread(new RMITask(configuration, (UserMap) users, callbackService));
 		rmi.start();
 		Thread backup = new Thread(new BackupTask(configuration, users, posts));
 		backup.start();
-		Thread rewards = new Thread(new RewardsTask(users, posts));
+		Thread rewards = null;
+		try { rewards = new Thread(new RewardsTask(users, posts, configuration)); }
+		catch (IOException e)
+		{
+			System.err.println("Fatal error occurred while setting up multicast.");
+			e.printStackTrace();
+			System.exit(1);
+		}
 		rewards.start();
+		final Thread rewardsHandler = rewards;
 
 		// setting up multiplexing:
 		ServerSocketChannel serverSocketChannel = null;
@@ -1155,7 +1175,7 @@ public class ServerMain
 			{
 				System.out.printf("\nServer has now entered shutdown mode.\n");
 				rmi.interrupt();
-				rewards.interrupt();
+				rewardsHandler.interrupt();
 				selectorHandler.wakeup();
 				Iterator<SelectionKey> keys = selectorHandler.keys().iterator();
 				while (keys.hasNext())
@@ -1181,7 +1201,7 @@ public class ServerMain
 				catch (InterruptedException e) { }
 				try { rmi.join(500); }
 				catch (InterruptedException e) { }
-				try { rewards.join(500); }
+				try { rewardsHandler.join(500); }
 				catch (InterruptedException e) { }
 			}
 		});

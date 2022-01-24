@@ -15,7 +15,7 @@ import server.storage.UserStorage;
 public class BackupTask implements Runnable
 {
 	/** Milliseconds to be spent sleeping between backups. */
-	public static final int SLEEPINGTIME = 5000;
+	public static final int SLEEPINGTIME = 500;
 
 	/** Users' backup file */
 	private final File usersFile;

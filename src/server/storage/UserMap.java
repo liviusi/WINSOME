@@ -425,7 +425,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				public boolean shouldSkipField(FieldAttributes f)
 				{
-					// skips "following" field specified inside User class.
+					// skips "following" and "transactions" fields specified inside User class.
 					return f.getDeclaringClass() == User.class && (f.getName().equals("following") || f.getName().equals("transactions"));
 				}
 
@@ -441,7 +441,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				public boolean shouldSkipField(FieldAttributes f)
 				{
-					// skips everything except username and following field
+					// skips everything except "username" and "following".
 					return f.getDeclaringClass() == User.class && !f.getName().equals("following") &&
 							!f.getName().equals("username");
 				}
@@ -456,7 +456,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			{
 				public boolean shouldSkipField(FieldAttributes f)
 				{
-					// skips everything except username and transactions field
+					// skips everything except "username" and "transactions".
 					return f.getDeclaringClass() == User.class && !f.getName().equals("transactions") &&
 							!f.getName().equals("username");
 				}
@@ -481,7 +481,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow json syntax or it does not
 	 * this class' IR).
 	 */
-	public static UserMap fromJSON(final File usersFile, final File followingFile)
+	public static UserMap fromJSON(final File usersFile, final File followingFile, final File transactionsFile)
 	throws FileNotFoundException, IOException, IllegalArchiveException
 	{
 		final String INVALID_STORAGE = "The files to be parsed are not a valid storage.";
@@ -590,7 +590,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		reader.close();
 		is.close();
 
-		is = new FileInputStream(followingFile);
+		is = new FileInputStream(transactionsFile);
 		reader = new JsonReader(new InputStreamReader(is));
 
 		reader.setLenient(true);
@@ -604,19 +604,27 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 			for (int i = 0; i < 2; i++)
 			{
 				name = reader.nextName();
+				boolean flag = false;
 				if (name.equals("username")) username = reader.nextString();
 				else if (name.equals("transactions"))
 				{
 					reader.beginArray();
-					for (int j = 0; j < 2; j++)
+					while (reader.hasNext())
 					{
-						name = reader.nextName();
-						if (name.equals("amount")) object.addProperty(name, reader.nextDouble());
-						else if (name.equals("timestamp")) object.addProperty(name, reader.nextString());
+						flag = true;
+						reader.beginObject();
+						for (int j = 0; j < 2; j++)
+						{
+							name = reader.nextName();
+							if (name.equals("amount")) object.addProperty(name, reader.nextDouble());
+							else if (name.equals("timestamp")) object.addProperty(name, reader.nextString());
+							else throw new IllegalArchiveException(INVALID_STORAGE);
+						}
+						reader.endObject();
+						if (flag) try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
+						catch (InvalidAmountException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 					}
 					reader.endArray();
-					try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
-					catch (InvalidAmountException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
 				}
 				else reader.skipValue();
 			}

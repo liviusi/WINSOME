@@ -113,6 +113,12 @@ TARGETS = run-client run-server build
 .RMIFollowers:
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
 
+.MulticastInfo:
+	$(JC) $(CP) $(JFLAGS) src/client/MulticastInfo.java $(OUTPUTDIR)
+
+.MulticastWorker:
+	$(JC) $(CP) $(JFLAGS) src/client/MulticastWorker.java $(OUTPUTDIR)
+
 .RMIFollowersSet: .RMIFollowers
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowersSet.java $(OUTPUTDIR)
 
@@ -143,7 +149,7 @@ TARGETS = run-client run-server build
 .Command: .ServerConfiguration .CommandCode .Communication .ResponseCode .Response .Colors
 	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
 
-ClientMain: .Command .RMIFollowersSet .RMICallback
+ClientMain: .Command .RMIFollowersSet .RMICallback .MulticastWorker .MulticastInfo
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
 ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask
