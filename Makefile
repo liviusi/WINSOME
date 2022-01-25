@@ -110,6 +110,9 @@ TARGETS = run-client run-server build
 .RewardsTask: .PostStorage .UserStorage
 	$(JC) $(CP) $(JFLAGS) src/server/RewardsTask.java $(OUTPUTDIR)
 
+.LoggingTask: .ServerConfiguration
+	$(JC) $(CP) $(JFLAGS) src/server/LoggingTask.java $(OUTPUTDIR)
+
 .RMIFollowers:
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
 
@@ -152,7 +155,7 @@ TARGETS = run-client run-server build
 ClientMain: .Command .RMIFollowersSet .RMICallback .MulticastWorker .MulticastInfo
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask
+ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask .LoggingTask
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
 build: ServerMain ClientMain
