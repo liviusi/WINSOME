@@ -1,7 +1,7 @@
-package user;
+package server.user;
 
 /**
- * @brief Exception to be thrown when an amount is negative.
+ * Exception to be thrown when an amount is negative.
  * @author Giacomo Trapani.
  */
 public class InvalidAmountException extends Exception

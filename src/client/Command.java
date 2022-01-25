@@ -1,4 +1,4 @@
-package api;
+package client;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -12,16 +12,19 @@ import java.rmi.registry.Registry;
 import java.util.Objects;
 import java.util.Set;
 
+import api.CommandCode;
+import api.Communication;
+import api.ResponseCode;
 import cryptography.Passwords;
 import server.storage.PasswordNotValidException;
 import server.storage.UserRMIStorage;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
-import user.InvalidTagException;
-import user.TagListTooLongException;
+import server.user.InvalidTagException;
+import server.user.TagListTooLongException;
 
 /**
- * @brief Utility class used to send properly parsed Command-Line commands from the client to the server.
+ * Utility class used to send properly parsed Command-Line commands from the client to the server.
  * The following notation will be used throughout the whole file:
  * - user(x) will be used to denote the user (on WINSOME) with username x, it will also be used as a shorthand for the couple (username, interests(username));
  * - POST(x) will be used to denote the state x is after a certain method's successful execution;
@@ -47,7 +50,7 @@ public class Command
 	private static final String POSTID = "postid";
 
 	/**
-	 * @brief Signs up a user to WINSOME.
+	 * Signs up a user to WINSOME.
 	 * @param username cannot be null.
 	 * @param password cannot be null.
 	 * @param tags cannot be null, may be empty.
@@ -76,28 +79,27 @@ public class Command
 	}
 
 	/**
-	 * @brief Logs in a user to WINSOME.
+	 * Logs in a user to WINSOME.
+	 * <br> - dest: POST(dest) = PREV(dest) U { followedBy(user(username)) } with { followedBy(x) } denoting the set of all the users x is currently followed by.
+	 * <br> - JSONMulticastInfo: CONCAT(POST(JSONMulticastInfo), info) with info denoting the String describing the multicast coordinates written following JSON syntax.
 	 * @param username cannot be null.
 	 * @param password cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null.
-	 * @param jsonMulticastInfo cannot be null.
+	 * @param JSONMulticastInfo cannot be null.
 	 * @param verbose toggled on if response is to be printed out.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveMessage, receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies
-	 *  	- dest: POST(dest) = PREV(dest) U { followedBy(user(username)) } with { followedBy(x) } denoting the set of all the users x is currently followed by.
-	 *  	- jsonMulticastInfo: CONCAT(POST(jsonMulticastInfo), info) with info denoting the String describing the multicast coordinates written following json syntax.
 	 */
-	public static int login(String username, String password, SocketChannel server, Set<String> dest, StringBuilder jsonMulticastInfo, boolean verbose)
+	public static int login(String username, String password, SocketChannel server, Set<String> dest, StringBuilder JSONMulticastInfo, boolean verbose)
 	throws IOException, NullPointerException
 	{
 		Objects.requireNonNull(username, "Username" + NULL_ERROR);
 		Objects.requireNonNull(password, "Password" + NULL_ERROR);
 		Objects.requireNonNull(server, "Server channel" + NULL_ERROR);
 		Objects.requireNonNull(dest, "Set" + NULL_ERROR);
-		Objects.requireNonNull(jsonMulticastInfo, "StringBuilder" + NULL_ERROR);
+		Objects.requireNonNull(JSONMulticastInfo, "StringBuilder" + NULL_ERROR);
 
 		ByteBuffer buffer = ByteBuffer.allocate(BUFFERSIZE);
 		byte[] bytes = null;
@@ -175,7 +177,7 @@ public class Command
 				printIf(r, verbose);
 				return 1;
 			}
-			jsonMulticastInfo.append(r.body);
+			JSONMulticastInfo.append(r.body);
 			return 0;
 		}
 		else
@@ -186,7 +188,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Logs out a user of WINSOME.
+	 * Logs out a user of WINSOME.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
@@ -223,7 +225,9 @@ public class Command
 	}
 
 	/**
-	 * @brief Lists out all the users on WINSOME sharing at least a common interest with the caller.
+	 * Lists out all the users on WINSOME sharing at least a common interest with the caller.
+	 * <br> dest: POST(dest) = PREV(dest) U { commonInterestsWith(user(username)) } with { commonInterestsWith(x) } denoting the set of each and every user
+	 * sharing an interest (a.k.a. a tag) with x.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null.
@@ -231,8 +235,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur(s) (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies: dest: POST(dest) = PREV(dest) U { commonInterestsWith(user(username)) } with { commonInterestsWith(x) } denoting the set of each and every user
-	 * sharing an interest (a.k.a. a tag) with x.
 	 */
 	public static int listUsers(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
@@ -268,7 +270,8 @@ public class Command
 	}
 
 	/**
-	 * @brief Lists out all the users on WINSOME the caller is currently following.
+	 * Lists out all the users on WINSOME the caller is currently following.
+	 * <br> dest: POST(dest) = PREV(dest) U { following(user(username)) } with { following(x) } denoting the set of the users x is currently following.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
@@ -276,7 +279,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = PREV(dest) U { following(user(username)) } with { following(x) } denoting the set of the users x is currently following.
 	 */
 	public static int listFollowing(String username, SocketChannel server, Set<String> dest, boolean verbose)
 	throws IOException, NullPointerException
@@ -313,7 +315,7 @@ public class Command
 
 
 	/**
-	 * @brief Starts following a user on WINSOME.
+	 * Starts following a user on WINSOME.
 	 * @param follower cannot be null.
 	 * @param followed cannot be null.
 	 * @param server cannot be null.
@@ -353,7 +355,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Stops following a user on WINSOME.
+	 * Stops following a user on WINSOME.
 	 * @param follower cannot be null.
 	 * @param followed cannot be null.
 	 * @param server cannot be null.
@@ -393,7 +395,8 @@ public class Command
 	}
 
 	/**
-	 * @brief Retrieves all posts by given author on WINSOME.
+	 * Retrieves all posts by given author on WINSOME.
+	 * <br> dest: POST(dest) = PREV(dest) U { postsBy(user(username)) } with { postsBy(x) } denoting the set of each and every post written by x.
 	 * @param author cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null.
@@ -401,7 +404,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = PREV(dest) U { postsBy(user(username)) } with { postsBy(x) } denoting the set of each and every post written by x.
 	 */
 	public static int viewBlog(final String author, final SocketChannel server, Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
@@ -437,7 +439,8 @@ public class Command
 	}
 
 	/**
-	 * @brief Uploads post with given parameters on WINSOME.
+	 * Uploads post with given parameters on WINSOME.
+	 * <br> dest: POST(dest) = CONCAT(PREV(dest), ID(p)) with ID(x) denoting the ID of the post x and p denoting the post newly created on WINSOME.
 	 * @param author cannot be null.
 	 * @param title cannot be null.
 	 * @param contents cannot be null.
@@ -447,7 +450,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = CONCAT(PREV(dest), ID(p)) with ID(x) denoting the ID of the post x and p denoting the post newly created on WINSOME.
 	 */
 	public static int createPost(final String author, final String title, final String contents, final SocketChannel server, StringBuilder dest, final boolean verbose)
 	throws IOException, NullPointerException
@@ -486,16 +488,16 @@ public class Command
 	}
 
 	/**
-	 * @brief Retrieves the feed of the given user. Let x be a user, a feed is defined as the union of the set of each and every post the author of which
+	 * Retrieves the feed of the given user. Let x be a user, a feed is defined as the union of the set of each and every post the author of which
 	 * is an user x is following and (the set of each and every post) has been rewon by an user x is following.
-	 * @param author cannot be null.
+	 * <br> dest: POST(dest) = PREV(dest) U feed(user(username)) with feed defined as before.
+	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null.
 	 * @param verbose toggled on if any output is to be printed out.
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveBytes and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = PREV(dest) U feed(user(username)) with feed defined as before.
 	 */
 	public static int showFeed(final String username, final SocketChannel server, Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
@@ -531,7 +533,8 @@ public class Command
 	}
 
 	/**
-	 * @brief Shows a post given its unique identifier.
+	 * Shows a post given its unique identifier.
+	 * <br> dest: POST(dest) = CONCAT(PREV(dest), postToJson(postID)) with postToJson(x) the post with identifier x written following JSON syntax.
 	 * @param username cannot be null.
 	 * @param postID identifier of the post.
 	 * @param server cannot be null.
@@ -540,7 +543,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies: dest: POST(dest) = CONCAT(PREV(dest), postToJson(postID)) with postToJson(x) the post with identifier x written following json syntax.
 	 */
 	public static int showPost(String username, int postID, SocketChannel server, StringBuilder dest, boolean verbose)
 	throws IOException, NullPointerException
@@ -577,7 +579,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Deletes a post given its identifier.
+	 * Deletes a post given its identifier.
 	 * @param username cannot be null.
 	 * @param postID identifier of the post.
 	 * @param server cannot be null.
@@ -616,7 +618,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Rewins a post given its identifier. CAVEAT: a rewin does not generate a new post, it is but a symbolic link between a user
+	 * Rewins a post given its identifier. CAVEAT: a rewin does not generate a new post, it is but a symbolic link between a user
 	 * and a post by another user.
 	 * @param username cannot be null.
 	 * @param postID identifier of the post.
@@ -656,7 +658,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Rates a post given its identifier (it may either correspond to upvoting or downvoting).
+	 * Rates a post given its identifier (it may either correspond to upvoting or downvoting).
 	 * @param voter cannot be null.
 	 * @param postID identifier of the post.
 	 * @param vote vote to be cast.
@@ -696,7 +698,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Adds a comment to a post given its identifier.
+	 * Adds a comment to a post given its identifier.
 	 * @param author cannot be null.
 	 * @param postID identifier of the post.
 	 * @param contents cannot be null.
@@ -737,7 +739,9 @@ public class Command
 	}
 
 	/**
-	 * @brief Gets the whole transaction history of a given user.
+	 * Gets the whole transaction history of a given user.
+	 * <br> dest: POST(dest) = PREV(post) U { transactionsBy(user(username)) } with transactionsBy(x) denoting the set of each and every transaction
+	 * x is involved with.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null.
@@ -745,8 +749,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = PREV(post) U { transactionsBy(user(username)) } with transactionsBy(x) denoting the set of each and every transaction
-	 * x is involved with.
 	 */
 	public static int getWallet(final String username, final SocketChannel server, final Set<String> dest, final boolean verbose)
 	throws IOException, NullPointerException
@@ -782,7 +784,9 @@ public class Command
 	}
 
 	/**
-	 * @brief Shows given users' WINCOINS converted to BTC.
+	 * Shows given users' WINCOINS converted to BTC.
+	 * <br> dest: POST(dest) = CONCAT(PREV(dest), walletToBTC(user(username))) with walletToBTC denoting the function computing the conversion
+	 * from WINSOME to BTC.
 	 * @param username cannot be null.
 	 * @param server cannot be null.
 	 * @param dest cannot be null
@@ -790,8 +794,6 @@ public class Command
 	 * @return 0 on success, 1 on failure, -1 if an error occurs.
 	 * @throws IOException if I/O error(s) occur (refer to Communication receiveMessage and send) or an invalid response is received.
 	 * @throws NullPointerException if any parameters are null.
-	 * @modifies dest: POST(dest) = CONCAT(PREV(dest), walletToBTC(user(username))) with walletToBTC denoting the function computing the conversion
-	 * from WINSOME to BTC.
 	 */
 	public static int getWalletInBitcoin(final String username, final SocketChannel server, final StringBuilder dest, final boolean verbose)
 	throws IOException, NullPointerException
@@ -826,7 +828,7 @@ public class Command
 	}
 
 	/**
-	 * @brief Prints on System.out if flag is toggled on.
+	 * Prints on System.out if flag is toggled on.
 	 * @param toPrint response to be printed out
 	 * @param flag to be toggled on if response is to be printed out.
 	 */

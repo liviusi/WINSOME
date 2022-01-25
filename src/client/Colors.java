@@ -1,7 +1,7 @@
-package api;
+package client;
 
 /**
- * @brief Utility class used to print out colored strings on console.
+ * Utility class used to print out colored strings on console.
  * @author Giacomo Trapani.
  */
 public class Colors

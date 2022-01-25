@@ -1,7 +1,7 @@
-package user;
+package server.user;
 
 /**
- * @brief Exception to be thrown when an attempt is made to have an already logged in user login.
+ * Exception to be thrown when an attempt is made to have an already logged in user login.
  * @author Giacomo Trapani
  */
 public class InvalidLoginException extends Exception

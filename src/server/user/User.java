@@ -1,4 +1,4 @@
-package user;
+package server.user;
 
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * @brief Class used to denote a user registered on WINSOME. This class is thread-safe.
+ * Class used to denote a user registered on WINSOME. This class is thread-safe.
  * @author Giacomo Trapani.
  */
 public class User
@@ -36,7 +36,7 @@ public class User
 	private static final String NULL_ERROR = " cannot be null.";
 
 	/**
-	 * @brief Default constructor.
+	 * Default constructor.
 	 * @param username cannot be null.
 	 * @param hashPassword cannot be null.
 	 * @param tags cannot be null.
@@ -64,7 +64,7 @@ public class User
 	}
 
 	/**
-	 * @brief Getter for this user's tags.
+	 * Getter for this user's tags.
 	 * @return a shallow copy of this user's tags.
 	 */
 	public Set<Tag> getTags()
@@ -75,7 +75,7 @@ public class User
 	}
 
 	/**
-	 * @brief Getter for the usernames of the users this user is currently following.
+	 * Getter for the usernames of the users this user is currently following.
 	 * @return a copy of the usernames of the users this user is currently following.
 	 */
 	public Set<String> getFollowing()
@@ -86,7 +86,7 @@ public class User
 	}
 
 	/**
-	 * @brief Getter for the transactions this user has been involved with.
+	 * Getter for the transactions this user has been involved with.
 	 * @return a copy of the transactions this user has been involved with.
 	 */
 	public List<Transaction> getTransactions()
@@ -104,7 +104,7 @@ public class User
 	}
 
 	/**
-	 * @brief Has the given client login if the credentials are correct.
+	 * Has the given client login if the credentials are correct.
 	 * @param clientID cannot be null.
 	 * @param hashPassword cannot be null.
 	 * @throws InvalidLoginException if a client has already logged in with this client.
@@ -126,7 +126,7 @@ public class User
 	}
 
 	/**
-	 * @brief Has the given client logout from this user.
+	 * Has the given client logout from this user.
 	 * @param clientID cannot be null.
 	 * @throws InvalidLogoutException if the client is not logged in to this user.
 	 * @throws NullPointerException if the client is null.
@@ -144,7 +144,7 @@ public class User
 	}
 
 	/**
-	 * @brief Has this user start following u.
+	 * Has this user start following u.
 	 * @param u cannot be null, must be different from this.
 	 * @return true on success, false if this user is already following u.
 	 * @throws NullPointerException if u is null.
@@ -165,7 +165,7 @@ public class User
 	}
 
 	/**
-	 * @brief Has this user stop following u.
+	 * Has this user stop following u.
 	 * @param u cannot be null.
 	 * @return true on success, false on failure i.e. if this user is not following u.
 	 * @throws NullPointerException if u is null.
@@ -184,7 +184,7 @@ public class User
 	}
 
 	/**
-	 * @brief Equality check is made on user's username.
+	 * Equality check is made on user's username.
 	 * @param o object to check the uguality against.
 	 */
 	@Override

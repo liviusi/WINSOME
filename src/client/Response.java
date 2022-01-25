@@ -1,11 +1,13 @@
-package api;
+package client;
 
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Set;
 
+import api.ResponseCode;
+
 /**
- * @brief Utility class used when parsing server's responses. Every response has a structure of this kind:
+ * Utility class used when parsing server's responses. Every response has a structure of this kind:
  * "CODE\r\nBODY" with CODE representing the response code and BODY its body.
  * @author Giacomo Trapani
  */
@@ -24,7 +26,7 @@ class Response<T>
 	}
 
 	/**
-	 * @brief Static factory method used to parse input string into a valid Response of which the body is a String.
+	 * Static factory method used to parse input string into a valid Response of which the body is a String.
 	 * @param str String to be parsed, its format must be CODE\r\nBODY with CODE representing the response code
 	 * and BODY its body.
 	 * @return A new instantiated Response based on input string, null if the parsing fails.
@@ -42,7 +44,7 @@ class Response<T>
 	}
 
 	/**
-	 * @brief Static factory method used to parse input bytes into a valid Response of which the body is a Set of Strings.
+	 * Static factory method used to parse input bytes into a valid Response of which the body is a Set of Strings.
 	 * @param bytes bytes to be parsed, its format must be CODE\r\nLENGTH_{1}STRING_{1}...LENGTH_{n}STRING{n}.
 	 * @return A new instantiated Response based on input bytes, null if the parsing fails.
 	 */

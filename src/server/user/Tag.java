@@ -1,10 +1,10 @@
-package user;
+package server.user;
 
 import java.util.Locale;
 import java.util.Objects;
 
 /**
- * @brief Class used to identify a tag i.e. an interest expressed by a certain user.
+ * Class used to identify a tag i.e. an interest expressed by a certain user.
  * @author Giacomo Trapani.
  */
 public class Tag
@@ -13,7 +13,7 @@ public class Tag
 	public final String name;
 
 	/**
-	 * @brief Default constructor.
+	 * Default constructor.
 	 * @param name cannot be null, it will be stripped of any non-alphanumeric character and converted to
 	 * lower case.
 	 * @throws InvalidTagException if name does not contain any non-alphanumeric character.
@@ -28,7 +28,7 @@ public class Tag
 	}
 
 	/**
-	 * @brief Equality check is made on tag's name.
+	 * Equality check is made on tag's name.
 	 * @param o object to check the uguality against.
 	 */
 	@Override

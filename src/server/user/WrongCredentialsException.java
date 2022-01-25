@@ -1,7 +1,7 @@
-package user;
+package server.user;
 
 /**
- * @brief Exception to be thrown when an attempt is made to login with wrong credentials.
+ * Exception to be thrown when an attempt is made to login with wrong credentials.
  * @author Giacomo Trapani.
  */
 public class WrongCredentialsException extends Exception

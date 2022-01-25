@@ -1,4 +1,4 @@
-package user;
+package server.user;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -8,7 +8,7 @@ import java.util.Locale;
 import com.google.gson.Gson;
 
 /**
- * @brief Utility class used to denote a Transaction made on WINSOME.
+ * Utility class used to denote a Transaction made on WINSOME.
  * @author Giacomo Trapani.
  */
 public class Transaction
@@ -22,7 +22,7 @@ public class Transaction
 	private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM. YYYY - HH:mm:ss").withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault());
 
 	/**
-	 * @brief Constructor for a new Transaction.
+	 * Constructor for a new Transaction.
 	 * @param amount must be greater than zero.
 	 * @throws InvalidAmountException if amount is not greater than zero.
 	 */
@@ -40,8 +40,8 @@ public class Transaction
 	}
 
 	/** Parses a JSON formatted string to a Transaction. */
-	public static Transaction fromJSON(String jsonString)
+	public static Transaction fromJSON(String JSONString)
 	{
-		return new Gson().fromJson(jsonString, Transaction.class);
+		return new Gson().fromJson(JSONString, Transaction.class);
 	}
 }

@@ -1,7 +1,7 @@
-package user;
+package server.user;
 
 /**
- * @brief Exception to be thrown when an attempt is made to have an already logged out user logout.
+ * Exception to be thrown when an attempt is made to have an already logged out user logout.
  * @author Giacomo Trapani
  */
 public class InvalidLogoutException extends Exception
