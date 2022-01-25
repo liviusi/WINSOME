@@ -6,7 +6,9 @@ OUTPUTDIR = -d ./bin
 
 .DEFAULT_GOAL := build
 
-TARGETS = run-client run-server build
+.PHONY: clean docs
+
+TARGETS = client server build all
 
 .InvalidConfigException:
 	$(JC) $(CP) $(JFLAGS) src/configuration/InvalidConfigException.java $(OUTPUTDIR)
@@ -21,34 +23,34 @@ TARGETS = run-client run-server build
 	$(JC) $(CP) $(JFLAGS) src/cryptography/Passwords.java $(OUTPUTDIR)
 
 .InvalidTagException:
-	$(JC) $(CP) $(JFLAGS) src/user/InvalidTagException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidTagException.java $(OUTPUTDIR)
 
 .Tag: .InvalidTagException
-	$(JC) $(CP) $(JFLAGS) src/user/Tag.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/Tag.java $(OUTPUTDIR)
 
 .InvalidLoginException:
-	$(JC) $(CP) $(JFLAGS) src/user/InvalidLoginException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLoginException.java $(OUTPUTDIR)
 
 .InvalidLogoutException:
-	$(JC) $(CP) $(JFLAGS) src/user/InvalidLogoutException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLogoutException.java $(OUTPUTDIR)
 
 .TagListTooLongException:
-	$(JC) $(CP) $(JFLAGS) src/user/TagListTooLongException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/TagListTooLongException.java $(OUTPUTDIR)
 
 .WrongCredentialsException:
-	$(JC) $(CP) $(JFLAGS) src/user/WrongCredentialsException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/WrongCredentialsException.java $(OUTPUTDIR)
 
 .SameUserException:
-	$(JC) $(CP) $(JFLAGS) src/user/SameUserException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/SameUserException.java $(OUTPUTDIR)
 
 .InvalidAmountException:
-	$(JC) $(CP) $(JFLAGS) src/user/InvalidAmountException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidAmountException.java $(OUTPUTDIR)
 
 .Transaction: .InvalidAmountException
-	$(JC) $(CP) $(JFLAGS) src/user/Transaction.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/Transaction.java $(OUTPUTDIR)
 
 .User: .Passwords .Tag .InvalidLoginException .InvalidLogoutException .TagListTooLongException .WrongCredentialsException .SameUserException .Transaction
-	$(JC) $(CP) $(JFLAGS) src/user/User.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/server/user/User.java $(OUTPUTDIR)
 
 .InvalidCommentException:
 	$(JC) $(CP) $(JFLAGS) src/server/post/InvalidCommentException.java $(OUTPUTDIR)
@@ -141,31 +143,29 @@ TARGETS = run-client run-server build
 	$(JC) $(CP) $(JFLAGS) src/api/ResponseCode.java $(OUTPUTDIR)
 
 .Response: .ResponseCode
-	$(JC) $(CP) $(JFLAGS) src/api/Response.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/client/Response.java $(OUTPUTDIR)
 
 .Communication:
 	$(JC) $(CP) $(JFLAGS) src/api/Communication.java $(OUTPUTDIR)
 
 .Colors:
-	$(JC) $(CP) $(JFLAGS) src/api/Colors.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/client/Colors.java $(OUTPUTDIR)
 
-.Command: .ServerConfiguration .CommandCode .Communication .ResponseCode .Response .Colors
-	$(JC) $(CP) $(JFLAGS) src/api/Command.java $(OUTPUTDIR)
+.Command: .CommandCode .Communication .ResponseCode .Response .Colors
+	$(JC) $(CP) $(JFLAGS) src/client/Command.java $(OUTPUTDIR)
 
-ClientMain: .Command .RMIFollowersSet .RMICallback .MulticastWorker .MulticastInfo
+client: .Command .RMIFollowersSet .RMICallback .MulticastWorker .MulticastInfo
 	$(JC) $(CP) $(JFLAGS) src/ClientMain.java $(OUTPUTDIR)
 
-ServerMain: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask .LoggingTask
+server: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask .Communication .ResponseCode .RewardsTask .LoggingTask
 	$(JC) $(CP) $(JFLAGS) src/ServerMain.java $(OUTPUTDIR)
 
-build: ServerMain ClientMain
+all: clean build
 
-run-client: ClientMain
-	java $(CP) ClientMain
-
-run-server: ServerMain
-	java $(CP) ServerMain
+build: server client
+	cd bin && jar -cevf ServerMain.class ../build/ServerMain.jar -C . api client configuration cryptography server server/post server/storage server/user && cd ..
+	cd bin && jar -cevf ./bin/ClientMain ../build/ClientMain.jar -C . cryptography/ configuration/ client/ api/ server/user/ && cd ..
 
 clean:
-	rm -rf ./bin/*
+	rm -rf ./bin/* ./build/*.jar
 	@touch ./bin/.keep
