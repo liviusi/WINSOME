@@ -59,6 +59,7 @@ public class BackupTask implements Runnable
 
 	public void run()
 	{
+		System.out.println("Backup task is now running!");
 		while (true)
 		{
 			try { Thread.sleep(SLEEPINGTIME); }

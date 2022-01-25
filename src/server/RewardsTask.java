@@ -59,6 +59,7 @@ public class RewardsTask implements Runnable
 
 	public void run()
 	{
+		System.out.println("Rewards task is now running!");
 		byte[] bytes = "Rewards have now been calculated!".getBytes(StandardCharsets.US_ASCII);
 		while (true)
 		{

@@ -73,25 +73,21 @@ public class RMITask implements Runnable
 			System.err.printf("Fatal error occurred:\n%s\n", e.getMessage());
 			System.exit(1);
 		}
-		System.out.println("RMI setup complete.");
+		System.out.println("RMI task is now running!");
 		/** This thread needs not to die before deallocating the resources used for RMI. */
-		while (true)
+		while (!Thread.currentThread().isInterrupted())
 		{
 			try { Thread.sleep(TIMEOUT); }
-			catch (InterruptedException shutdown)
-			{
-				try
-				{
-					// deallocate resources:
-					r.unbind(registerServiceName);
-					UnicastRemoteObject.unexportObject(users, true);
-					System.out.println("RMI shutdown complete.");
-				}
-				catch (NotBoundException | RemoteException ignored)
-				{
-					return;
-				}
-			}
+			catch (InterruptedException shutdown) { break; }
 		}
+		try
+		{
+			// deallocate resources:
+			r.unbind(registerServiceName);
+			UnicastRemoteObject.unexportObject(users, true);
+			System.out.println("RMI shutdown complete.");
+			return;
+		}
+		catch (NotBoundException | RemoteException ignored) { return; }
 	}
 }

@@ -38,7 +38,7 @@ public class MulticastWorker implements Runnable
 
 	public void run()
 	{
-		while(!Thread.interrupted()) // an interrupt is to be sent from the main thread before terminating
+		while(!Thread.currentThread().isInterrupted()) // an interrupt is to be sent from the main thread before terminating
 		{
 			byte[] bytes = new byte[2048];
 			DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
