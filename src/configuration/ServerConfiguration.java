@@ -28,6 +28,7 @@ public class ServerConfiguration extends Configuration
 	private static final String POSTSINTERACTIONSSTORAGE_STRING = "POSTSINTERACTIONSSTORAGE";
 	private static final String REWARDSINTERVAL_STRING = "REWARDSINTERVAL";
 	private static final String REWARDSAUTHORPERCENTAGE_STRING = "REWARDSAUTHORPERCENTAGE";
+	private static final String LOGFILE_STRING = "LOGFILE";
 
 	/** Multicast address. */
 	public final InetAddress multicastAddress;
@@ -55,7 +56,10 @@ public class ServerConfiguration extends Configuration
 	public final String postsInteractionsStorageFilename;
 	/** Interval (in msec) to wait between rewards' periodic calculation. */
 	public final int rewardsInterval;
+	/** Percentage of the rewards to be sent out to the author of a certain post. */
 	public final double rewardsAuthorPercentage;
+	/** Filename of the file server's log is to be stored in. */
+	public final String logFilename;
 
 	/**
 	 * @param configurationFile cannot be null. It must follow the syntax specified in the report.
@@ -79,7 +83,8 @@ public class ServerConfiguration extends Configuration
 			properties.containsKey(TRANSACTIONSSTORAGE_STRING) && properties.containsKey(FOLLOWINGSTORAGE_STRING)
 			&& properties.containsKey(POSTSSTORAGE_STRING) && properties.containsKey(POSTSINTERACTIONSSTORAGE_STRING)
 			&& properties.containsKey(REWARDSINTERVAL_STRING) && properties.containsKey(MULTICASTADDRESS_STRING)
-			&& properties.containsKey(PORTNOMULTICAST_STRING) && properties.containsKey(REWARDSAUTHORPERCENTAGE_STRING))
+			&& properties.containsKey(PORTNOMULTICAST_STRING) && properties.containsKey(REWARDSAUTHORPERCENTAGE_STRING)
+			&& properties.containsKey(LOGFILE_STRING))
 		{
 			// validating multicast port number:
 			try { portNoMulticast = parsePortNo(properties.getProperty(PORTNOMULTICAST_STRING)); }
@@ -144,6 +149,7 @@ public class ServerConfiguration extends Configuration
 			transactionsFilename = properties.getProperty(TRANSACTIONSSTORAGE_STRING);
 			postStorageFilename = properties.getProperty(POSTSSTORAGE_STRING);
 			postsInteractionsStorageFilename = properties.getProperty(POSTSINTERACTIONSSTORAGE_STRING);
+			logFilename = properties.getProperty(LOGFILE_STRING);
 			return;
 		}
 		else

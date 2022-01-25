@@ -16,10 +16,15 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.rmi.RemoteException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +43,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import configuration.InvalidConfigException;
 import configuration.ServerConfiguration;
 import server.BackupTask;
+import server.LoggingTask;
 import server.RMICallbackService;
 import server.RMITask;
 import server.RewardsTask;
@@ -117,13 +123,15 @@ public class ServerMain
 		private Map<SocketChannel, String> loggedInClients = null;
 		/** Pointer to the RMI callbackService. */
 		private RMICallbackService callbackService = null;
+		/** Pointer to the blocking queue shared with the logging thread. */
+		private BlockingQueue<String> logQueue = null;
 
 		private static final String CLIENT_ALREADY_LOGGED_IN = "Client has already logged in";
 
 		/** Default constructor. */
 		public RequestHandler(final Set<SetElement> toBeRegistered, final Selector selector,
 				final SelectionKey key, final UserStorage users, final PostStorage posts, Map<SocketChannel, String> loggedInClients,
-				final RMICallbackService callbackService)
+				final RMICallbackService callbackService, BlockingQueue<String> logQueue)
 		{
 			this.toBeRegistered = Objects.requireNonNull(toBeRegistered, "Set" + NULL_ERROR);
 			this.selector = Objects.requireNonNull(selector, "Selector" + NULL_ERROR);
@@ -132,32 +140,51 @@ public class ServerMain
 			this.posts = Objects.requireNonNull(posts, "Posts storage" + NULL_ERROR);
 			this.loggedInClients = Objects.requireNonNull(loggedInClients, "Logged in clients" + NULL_ERROR);
 			this.callbackService = Objects.requireNonNull(callbackService, "Callback service" + NULL_ERROR);
+			this.logQueue = Objects.requireNonNull(logQueue, "Queue" + NULL_ERROR);
 		}
 
 		public void run()
 		{
+			/** Attachment buffer. */
 			ByteBuffer buffer = (ByteBuffer) key.attachment();
+			/** Client channel. */
 			SocketChannel client = (SocketChannel) key.channel();
+			/** Result of reading operations. */
 			int nRead = 0;
+			/** Size of the buffer. */
 			int size = BUFFERSIZE;
+			/** Used to parse request. */
 			JsonObject jsonMessage = null;
+			/** Used to parse jsonMessage. */
 			JsonElement elem = null;
+			/** Used to build up the answer to be sent back. */
 			ByteArrayOutputStream answerConstructor = new ByteArrayOutputStream();
+			/** Used to read from client. */
 			StringBuilder sb = new StringBuilder();
+			/** Username of the user this client is currently logged in with. */
 			final String username;
+			/** Request message. */
 			String message = null;
-			String clientName = null;
+			/** Toggled on if the request has triggered an exception in any of the storages used. */
 			boolean exceptionCaught = false;
-	
+			/** Used to build up the message to be logged. */
+			StringBuilder logMessageBuilder = new StringBuilder();
+
+			logMessageBuilder.append(String.format("[%s][THREAD %d][CLIENT %d]",
+						DateTimeFormatter.ofPattern("dd MMM. YYYY - HH:mm:ss").withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault()).format(Instant.now()),
+						Thread.currentThread().getId(), client.hashCode())
+			);
+
 			buffer.flip();
 			buffer.clear();
 			try { nRead = Communication.receiveMessage(client, buffer, sb); }
 			catch (ClosedChannelException e) { return; }
 			catch (IOException e)
 			{
-				System.err.printf("I/O error occurred:\n%s\n", e.getMessage());
+				logMessageBuilder.append(String.format("[I/O ERROR %s][DISCONNECTION]\n", e.getMessage()));
 				try { client.close(); }
 				catch (IOException ignored) { }
+				logQueue.offer(logMessageBuilder.toString());
 				return;
 			}
 			if (nRead == -1) // client forcibly disconnected
@@ -165,6 +192,7 @@ public class ServerMain
 				username = loggedInClients.get(client);
 				if (username != null)
 				{
+					logMessageBuilder.append(String.format("[%s][DISCONNECTION]\n", username));
 					loggedInClients.remove(client);
 					try { users.handleLogout(username, client); }
 					catch (InvalidLogoutException ignored) { }
@@ -172,18 +200,23 @@ public class ServerMain
 				}
 				try { client.close(); }
 				catch (IOException ignored) { }
+				logQueue.offer(logMessageBuilder.toString());
+				return;
 			}
 			else if (nRead == 0) return;
 			else // read has not failed:
 			{
+				final String loggedInUsername = loggedInClients.get(client);
+				if (loggedInUsername != null) logMessageBuilder.append(String.format("[%s]", loggedInUsername));
 				buffer.flip();
 				buffer.clear();
 				message = sb.toString();
-				clientName = Integer.toString(client.hashCode());
-				System.out.printf("> client %s: \"%s\"\n", clientName, message);
+				/** Code to be appended in the log. */
+				ResponseCode code = null;
+				logMessageBuilder.append(String.format("[%s]", message));
 				jsonMessage = new Gson().fromJson(message, JsonObject.class);
 				elem = jsonMessage.get("command");
-				if (elem == null) syntaxErrorHandler(answerConstructor);
+				if (elem == null) code = syntaxErrorHandler(answerConstructor);
 				else
 				{
 					if (elem.getAsString().equals(CommandCode.LOGINATTEMPT.description))
@@ -192,6 +225,7 @@ public class ServerMain
 						{
 							try
 							{
+								code = ResponseCode.FORBIDDEN;
 								answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 								answerConstructor.write(CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
 							}
@@ -200,12 +234,12 @@ public class ServerMain
 						else
 						{
 							elem = jsonMessage.get("username");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								username = elem.getAsString();
 								elem = jsonMessage.get("hashedpassword");
-								if (elem == null) syntaxErrorHandler(answerConstructor);
+								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
 									String hashedPassword = elem.getAsString();
@@ -215,6 +249,7 @@ public class ServerMain
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -223,6 +258,7 @@ public class ServerMain
 									catch (NullPointerException e)
 									{
 										exceptionCaught = true;
+										code = ResponseCode.BAD_REQUEST;
 										try { answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII)); }
 										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 									}
@@ -230,6 +266,7 @@ public class ServerMain
 									{
 										try
 										{
+											code = ResponseCode.OK;
 											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write((username + " has now logged in.").getBytes(StandardCharsets.US_ASCII));
 										}
@@ -246,6 +283,7 @@ public class ServerMain
 						{
 							try
 							{
+								code = ResponseCode.FORBIDDEN;
 								answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 								answerConstructor.write(CLIENT_ALREADY_LOGGED_IN.getBytes(StandardCharsets.US_ASCII));
 							}
@@ -254,7 +292,7 @@ public class ServerMain
 						else
 						{
 							elem = jsonMessage.get("username");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								username = elem.getAsString();
@@ -265,6 +303,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.NOT_FOUND;
 										answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -274,6 +313,7 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(salt.getBytes(StandardCharsets.US_ASCII));
 									}
@@ -285,11 +325,11 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.PULLFOLLOWERS.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								Set<String> result = null;
 								try { result = users.recoverFollowers(username); }
@@ -298,6 +338,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.NOT_FOUND;
 										answerConstructor.write(ResponseCode.NOT_FOUND.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -307,6 +348,7 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										size = SetToByteArray(result, answerConstructor);
 									}
@@ -319,6 +361,7 @@ public class ServerMain
 					{
 						try
 						{
+							code = ResponseCode.OK;
 							answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 							answerConstructor.write(multicastInfoBytes);
 						}
@@ -327,11 +370,11 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.LOGOUT.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								try { users.handleLogout(username, client); }
 								catch (InvalidLogoutException | NoSuchUserException e)
@@ -339,6 +382,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.FORBIDDEN;
 										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -348,6 +392,7 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write((username + " has now logged out").getBytes(StandardCharsets.US_ASCII));
 									}
@@ -355,17 +400,17 @@ public class ServerMain
 									loggedInClients.remove(client);
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.LISTUSERS.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								Set<String> result = null;
 								try { result = users.handleListUsers(username); }
@@ -374,6 +419,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.BAD_REQUEST;
 										answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -383,23 +429,24 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										size = SetToByteArray(result, answerConstructor);
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.LISTFOLLOWING.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								Set<String> result = null;
 								try { result = users.handleListFollowing(username); }
@@ -408,6 +455,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.BAD_REQUEST;
 										answerConstructor.write(ResponseCode.BAD_REQUEST.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -417,28 +465,29 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										size = SetToByteArray(result, answerConstructor);
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.FOLLOWUSER.description))
 					{
 						elem = jsonMessage.get("follower");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("followed");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String followed = elem.getAsString();
-								if (loggedInClients.get(client).equals(username))
+								if (loggedInUsername.equals(username))
 								{
 									boolean result = false;
 									try { result = users.handleFollowUser(username, followed); }
@@ -447,6 +496,7 @@ public class ServerMain
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -458,6 +508,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write((username + " is already following " + followed).getBytes(StandardCharsets.US_ASCII));
 											}
@@ -468,6 +519,7 @@ public class ServerMain
 											callbackService.notifyNewFollower(username, followed);
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write((username + " is now following " + followed).getBytes(StandardCharsets.US_ASCII));
 											}
@@ -475,24 +527,24 @@ public class ServerMain
 										}
 									}
 								}
-								else invalidUsernameHandler(answerConstructor, username);
+								else code = invalidUsernameHandler(answerConstructor, username);
 							}
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.UNFOLLOWUSER.description))
 					{
 						elem = jsonMessage.get("follower");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("followed");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String unfollowed = elem.getAsString();
 								boolean result = false;
-								if (loggedInClients.get(client).equals(username))
+								if (loggedInUsername.equals(username))
 								{
 									try { result = users.handleUnfollowUser(username, unfollowed); }
 									catch (IllegalArgumentException | NullPointerException | NoSuchUserException e)
@@ -500,6 +552,7 @@ public class ServerMain
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -511,6 +564,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write((username + " is not following " + unfollowed).getBytes(StandardCharsets.US_ASCII));
 											}
@@ -521,6 +575,7 @@ public class ServerMain
 											callbackService.notifyUnfollow(username, unfollowed);
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write((username + " has now stopped following " + unfollowed).getBytes(StandardCharsets.US_ASCII));
 											}
@@ -528,14 +583,14 @@ public class ServerMain
 										}
 									}
 								}
-								else invalidUsernameHandler(answerConstructor, username);
+								else code = invalidUsernameHandler(answerConstructor, username);
 							}
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.VIEWBLOG.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
@@ -543,6 +598,7 @@ public class ServerMain
 							result = posts.handleBlog(username);
 							try
 							{
+								code = ResponseCode.OK;
 								answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 								size = SetToByteArray(result, answerConstructor);
 							}
@@ -552,21 +608,21 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.CREATEPOST.description))
 					{
 						elem = jsonMessage.get("author");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("title");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String title = elem.getAsString();
 								elem = jsonMessage.get("contents");
-								if (elem == null) syntaxErrorHandler(answerConstructor);
+								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
 									final String contents = elem.getAsString();
-									if (loggedInClients.get(client).equals(username))
+									if (loggedInUsername.equals(username))
 									{
 										int postID = -1;
 										try { postID = posts.handleCreatePost(username, title, contents); }
@@ -575,6 +631,7 @@ public class ServerMain
 											exceptionCaught = true;
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 											}
@@ -585,13 +642,14 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write((username + " has now created a new post: " + postID).getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
 									}
-									else invalidUsernameHandler(answerConstructor, username);
+									else code = invalidUsernameHandler(answerConstructor, username);
 								}
 							}
 						}
@@ -599,11 +657,11 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.SHOWFEED.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								Set<String> result = null;
 								try { result = posts.handleShowFeed(username, users); }
@@ -612,6 +670,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.FORBIDDEN;
 										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -621,40 +680,42 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										size = SetToByteArray(result, answerConstructor);
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.SHOWPOST.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("postid");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
-								if (loggedInClients.get(client).equals(username))
+								if (loggedInUsername.equals(username))
 								{
 									String result = null;
 									try { result = posts.handleShowPost(Integer.parseInt(elem.getAsString())); }
 									catch (NumberFormatException e)
 									{
 										exceptionCaught = true;
-										syntaxErrorHandler(answerConstructor);
+										code = syntaxErrorHandler(answerConstructor);
 									}
 									catch (NoSuchPostException e)
 									{
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -664,41 +725,43 @@ public class ServerMain
 									{
 										try
 										{
+											code = ResponseCode.OK;
 											answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(result.getBytes(StandardCharsets.US_ASCII));
 										}
 										catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 									}
 								}
-								else invalidUsernameHandler(answerConstructor, username);
+								else code = invalidUsernameHandler(answerConstructor, username);
 							}
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.DELETEPOST.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("postid");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
-								if (loggedInClients.get(client).equals(username))
+								if (loggedInUsername.equals(username))
 								{
 									boolean result = false;
 									try { result = posts.handleDeletePost(username, Integer.parseInt(elem.getAsString())); }
 									catch (NumberFormatException e)
 									{
 										exceptionCaught = true;
-										syntaxErrorHandler(answerConstructor);
+										code = syntaxErrorHandler(answerConstructor);
 									}
 									catch (NoSuchPostException e)
 									{
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -710,6 +773,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Post has now been deleted.".getBytes(StandardCharsets.US_ASCII));
 											}
@@ -719,6 +783,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Post could not be deleted.".getBytes(StandardCharsets.US_ASCII));
 											}
@@ -726,35 +791,36 @@ public class ServerMain
 										}
 									}
 								}
-								else invalidUsernameHandler(answerConstructor, username);
+								else code = invalidUsernameHandler(answerConstructor, username);
 							}
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.REWIN.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("postid");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
-								if (loggedInClients.get(client).equals(username))
+								if (loggedInUsername.equals(username))
 								{
 									boolean result = false;
 									try { result = posts.handleRewin(username, users, Integer.parseInt(elem.getAsString())); }
 									catch (NumberFormatException e)
 									{
 										exceptionCaught = true;
-										syntaxErrorHandler(answerConstructor);
+										code = syntaxErrorHandler(answerConstructor);
 									}
 									catch (NoSuchPostException e)
 									{
 										exceptionCaught = true;
 										try
 										{
+											code = ResponseCode.FORBIDDEN;
 											answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 											answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 										}
@@ -766,6 +832,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Post has now been rewon.".getBytes(StandardCharsets.US_ASCII));
 											}
@@ -775,6 +842,7 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Post could not be rewon.".getBytes(StandardCharsets.US_ASCII));
 											}
@@ -782,39 +850,40 @@ public class ServerMain
 										}
 									}
 								}
-								else invalidUsernameHandler(answerConstructor, username);
+								else code = invalidUsernameHandler(answerConstructor, username);
 							}
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.RATE.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("vote");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String vote = elem.getAsString();
 								elem = jsonMessage.get("postid");
-								if (elem == null) syntaxErrorHandler(answerConstructor);
+								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
-									if (loggedInClients.get(client).equals(username))
+									if (loggedInUsername.equals(username))
 									{
 										try { posts.handleRate(username, users, Integer.parseInt(elem.getAsString()), Vote.fromValue(Integer.parseInt(vote))); }
 										catch (NumberFormatException e)
 										{
 											exceptionCaught = true;
-											syntaxErrorHandler(answerConstructor);
+											code = syntaxErrorHandler(answerConstructor);
 										}
 										catch (NoSuchPostException | InvalidVoteException e)
 										{
 											exceptionCaught = true;
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 											}
@@ -824,13 +893,14 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Vote has now been cast.".getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
 									}
-									else invalidUsernameHandler(answerConstructor, username);
+									else code = invalidUsernameHandler(answerConstructor, username);
 								}
 							}
 						}
@@ -838,32 +908,33 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.COMMENT.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
 							elem = jsonMessage.get("contents");
-							if (elem == null) syntaxErrorHandler(answerConstructor);
+							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String contents = elem.getAsString();
 								elem = jsonMessage.get("postid");
-								if (elem == null) syntaxErrorHandler(answerConstructor);
+								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
-									if (loggedInClients.get(client).equals(username))
+									if (loggedInUsername.equals(username))
 									{
 										try { posts.handleAddComment(username, users, Integer.parseInt(elem.getAsString()), contents); }
 										catch (NumberFormatException e)
 										{
 											exceptionCaught = true;
-											syntaxErrorHandler(answerConstructor);
+											code = syntaxErrorHandler(answerConstructor);
 										}
 										catch (InvalidCommentException | NoSuchPostException e)
 										{
 											exceptionCaught = true;
 											try
 											{
+												code = ResponseCode.FORBIDDEN;
 												answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 											}
@@ -873,13 +944,14 @@ public class ServerMain
 										{
 											try
 											{
+												code = ResponseCode.OK;
 												answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 												answerConstructor.write("Comment has now been added.".getBytes(StandardCharsets.US_ASCII));
 											}
 											catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 										}
 									}
-									else invalidUsernameHandler(answerConstructor, username);
+									else code = invalidUsernameHandler(answerConstructor, username);
 								}
 							}
 						}
@@ -887,11 +959,11 @@ public class ServerMain
 					else if (elem.getAsString().equals(CommandCode.WALLET.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								Set<String> result = null;
 								try { result = users.handleGetWallet(username); }
@@ -900,6 +972,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.FORBIDDEN;
 										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -909,23 +982,24 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										size = SetToByteArray(result, answerConstructor);
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
 					else if (elem.getAsString().equals(CommandCode.WALLETBTC.description))
 					{
 						elem = jsonMessage.get("username");
-						if (elem == null) syntaxErrorHandler(answerConstructor);
+						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							if (loggedInClients.get(client).equals(username))
+							if (loggedInUsername.equals(username))
 							{
 								String result = null;
 								try { result = users.handleGetWalletInBitcoin(username); }
@@ -934,6 +1008,7 @@ public class ServerMain
 									exceptionCaught = true;
 									try
 									{
+										code = ResponseCode.FORBIDDEN;
 										answerConstructor.write(ResponseCode.FORBIDDEN.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(e.getMessage().getBytes(StandardCharsets.US_ASCII));
 									}
@@ -944,22 +1019,26 @@ public class ServerMain
 								{
 									try
 									{
+										code = ResponseCode.OK;
 										answerConstructor.write(ResponseCode.OK.getDescription().getBytes(StandardCharsets.US_ASCII));
 										answerConstructor.write(result.getBytes(StandardCharsets.US_ASCII));
 									}
 									catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 								}
 							}
-							else invalidUsernameHandler(answerConstructor, username);
+							else code = invalidUsernameHandler(answerConstructor, username);
 						}
 					}
-					else syntaxErrorHandler(answerConstructor);
+					else code = syntaxErrorHandler(answerConstructor);
+
+					logMessageBuilder.append(String.format("[%d]\n", code.getValue()));
 
 					putByteArray(buffer, size, answerConstructor.toByteArray());
 					buffer.flip();
 
 					toBeRegistered.add(new SetElement(client, SelectionKey.OP_WRITE, buffer));
 					selector.wakeup();
+					logQueue.offer(logMessageBuilder.toString());
 					return;
 				}
 			}
@@ -1037,7 +1116,7 @@ public class ServerMain
 		}
 
 		/** Handles syntax errors. */
-		private static void syntaxErrorHandler(ByteArrayOutputStream baos)
+		private static ResponseCode syntaxErrorHandler(ByteArrayOutputStream baos)
 		{
 			try
 			{
@@ -1045,10 +1124,11 @@ public class ServerMain
 				baos.write("Syntax error.".getBytes(StandardCharsets.US_ASCII));
 			}
 			catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+			return ResponseCode.BAD_REQUEST;
 		}
 
 		/** Handles username's errors. */
-		private static void invalidUsernameHandler(ByteArrayOutputStream baos, final String username)
+		private static ResponseCode invalidUsernameHandler(ByteArrayOutputStream baos, final String username)
 		{
 			try
 			{
@@ -1056,6 +1136,7 @@ public class ServerMain
 				baos.write(String.format("User %s is not logged in with this client", username).getBytes(StandardCharsets.US_ASCII));
 			}
 			catch (IOException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+			return ResponseCode.NOT_FOUND;
 		}
 	}
 
@@ -1187,6 +1268,9 @@ public class ServerMain
 		}
 		rewards.start();
 		final Thread rewardsHandler = rewards;
+		BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
+		final Thread logging = new Thread(new LoggingTask(logQueue, configuration));
+		logging.start();
 
 		// setting up multiplexing:
 		ServerSocketChannel serverSocketChannel = null;
@@ -1220,6 +1304,7 @@ public class ServerMain
 				System.out.printf("\nServer has now entered shutdown mode.\n");
 				rmi.interrupt();
 				rewardsHandler.interrupt();
+				logging.interrupt();
 				selectorHandler.wakeup();
 				Iterator<SelectionKey> keys = selectorHandler.keys().iterator();
 				while (keys.hasNext())
@@ -1255,10 +1340,12 @@ public class ServerMain
 				catch (InterruptedException e) { }
 				try { rewardsHandler.join(500); }
 				catch (InterruptedException e) { }
+				try { logging.join(500); }
+				catch (InterruptedException e) { }
 			}
 		});
-		System.out.println("Server is now running...");
 
+		/** Maps a channel to the username it has logged in with. */
 		Map<SocketChannel, String> loggedInClients = new ConcurrentHashMap<>();
 		// select loop:
 		while (true)
@@ -1302,7 +1389,6 @@ public class ServerMain
 							client.configureBlocking(false);
 
 							client.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(BUFFERSIZE));
-							System.out.println("New client accepted: " + client.hashCode());
 						}
 						catch (ClosedChannelException clientDisconnected) { } // nothing to do
 						catch (IOException e)
@@ -1314,7 +1400,7 @@ public class ServerMain
 					if (k.isReadable())
 					{
 						k.cancel();
-						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, posts, loggedInClients, callbackService)));
+						threadPool.execute(new Thread(new RequestHandler(toBeRegistered, selector, k, users, posts, loggedInClients, callbackService, logQueue)));
 					}
 					if (k.isWritable())
 					{

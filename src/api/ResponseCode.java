@@ -6,12 +6,14 @@ package api;
  */
 public enum ResponseCode
 {
-	OK("200\r\n"),
-	CREATED("201\r\n"),
-	BAD_REQUEST("400\r\n"),
-	FORBIDDEN("403\r\n"),
-	NOT_FOUND("404\r\n");
+	OK(200, "200\r\n"),
+	CREATED(201, "201\r\n"),
+	BAD_REQUEST(400, "400\r\n"),
+	FORBIDDEN(403, "403\r\n"),
+	NOT_FOUND(404, "404\r\n");
 
+	/** Numeric value of the code. */
+	private int value = -1;
 	/** Used to represent the code as a string. */
 	private String description = null;
 
@@ -19,14 +21,19 @@ public enum ResponseCode
 	 * @brief Private constructor used to initialize a ResponseCode.
 	 * @param description Used to describe the code.
 	 */
-	private ResponseCode(String description)
+	private ResponseCode(int value, String description)
 	{
+		this.value = value;
 		this.description = description;
 	}
 
-	/**
-	 * @return ResponseCode's representation as a string.
-	 */
+	/** Getter for the value. */
+	public int getValue()
+	{
+		return value;
+	}
+
+	/**  Getter for the description. */
 	public String getDescription()
 	{
 		return description;

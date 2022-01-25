@@ -9,7 +9,7 @@ import java.util.Set;
  * "CODE\r\nBODY" with CODE representing the response code and BODY its body.
  * @author Giacomo Trapani
  */
-public class Response<T>
+class Response<T>
 {
 	/** Holds response's code value. */
 	public final ResponseCode code;
