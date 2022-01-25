@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import configuration.ServerConfiguration;
 
 /**
- * @brief Utility class used to group together the whole logging logic as a single task.
+ * Utility class used to group together the whole logging logic as a single task.
  * @author Giacomo Trapani.
  */
 public class LoggingTask implements Runnable

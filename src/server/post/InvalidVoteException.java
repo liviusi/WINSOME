@@ -1,7 +1,7 @@
 package server.post;
 
 /**
- * @brief Exception to be thrown when an attempt is made to cast an invalid vote.
+ * Exception to be thrown when an attempt is made to cast an invalid vote.
  * @author Giacomo Trapani.
  */
 public class InvalidVoteException extends Exception

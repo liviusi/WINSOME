@@ -21,7 +21,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 /**
- * @brief Abstract class with utility methods for storage classes.
+ * Abstract class with utility methods for storage classes.
  * @author Giacomo Trapani.
  */
 abstract class Storage
@@ -30,7 +30,7 @@ abstract class Storage
 	private static final String NULL_ERROR = " cannot be null";
 
 	/**
-	 * @brief Creates a backup of a data structure and stores it inside given file which will be overwritten.
+	 * Creates a backup of a data structure and stores it inside given file which will be overwritten.
 	 * @param <K> type of the keys of the data Map.
 	 * @param <V> type of the values of the data Map.
 	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
@@ -78,7 +78,7 @@ abstract class Storage
 	}
 
 	/**
-	 * @brief Creates a backup of a data structure and stores it inside given file which will be overwritten.
+	 * Creates a backup of a data structure and stores it inside given file which will be overwritten.
 	 * @param <T> type of the items of the data Collection.
 	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
 	 * @param fileToBeStoredIn cannot be null.
@@ -127,7 +127,9 @@ abstract class Storage
 	}
 
 	/**
-	 * @brief Creates a backup of a data structure and appends it to given file.
+	 * Creates a backup of a data structure and appends it to given file.
+	 * <br> backedUpData: POST(backedUpData) = PREV(backedUpData) U toBeBackedUpData.
+	 * <br> toBeBackedUpData: POST(toBeBackedUpData) = EMPTY_MAP with EMPTY_MAP denoting an empty map.
 	 * @param <K> type of the keys of the data Maps.
 	 * @param <V> type of the values of the data Maps.
 	 * @param strategy cannot be null. It is used to specify whichever fields are not to be stored.
@@ -137,9 +139,6 @@ abstract class Storage
 	 * @param firstBackupAndNonEmptyStorage should be toggled on if and only if this is the first backup and the storage is non-empty.
 	 * @throws IOException if I/O error(s) occur(s).
 	 * @throws NullPointerException if any parameter is null.
-	 * @modifies
-	 *  	backedUpData: POST(backedUpData) = PREV(backedUpData) U toBeBackedUpData.
-	 *  	toBeBackedUpData: POST(toBeBackedUpData) = EMPTY_MAP with EMPTY_MAP denoting an empty map.
 	 */
 	public static <K, V> void backupCached(final ExclusionStrategy strategy, final File fileToBeStoredIn, final Map<K, V> backedUpData,
 			Map<K,V> toBeBackedUpData, boolean firstBackupAndNonEmptyStorage)
@@ -222,7 +221,7 @@ abstract class Storage
 	}
 
 	/**
-	 * @brief Writes a single character onto the channel.
+	 * Writes a single character onto the channel.
 	 * @param channel pointer to the channel to write on.
 	 * @param c character to write.
 	 * @throws IOException if I/O error(s) occur.

@@ -31,10 +31,10 @@ import com.google.gson.stream.JsonReader;
 
 import cryptography.Passwords;
 import server.post.Post.GainAndCurators;
-import user.*;
+import server.user.*;
 
 /**
- * @brief User storage backed by a hashmap. This class is thread-safe.
+ * User storage backed by a hashmap. This class is thread-safe.
  * @author Giacomo Trapani.
  */
 public class UserMap extends Storage implements UserRMIStorage, UserStorage
@@ -288,7 +288,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 				if ((u = getUserByName(username)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
 				u.getFollowing().forEach(following ->
 				{
-					try { r.add(usersBackedUp.get(following).toString()); }
+					try { r.add(getUserByName(following).toString()); }
 					catch (NullPointerException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); } // storage is in an inconsistent state
 				});
 				return r;
@@ -473,14 +473,14 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	}
 
 	/**
-	 * @brief Instantiates UserMap given a backup of its users, one of their follows and one of their transactions all written according to json syntax.
+	 * Instantiates UserMap given a backup of its users, one of their follows and one of their transactions all written according to JSON syntax.
 	 * @param usersFile cannot be null, must be a valid user backup.
 	 * @param followingFile cannot be null, must be a valid backup of users' follows.
 	 * @return Instantiated map on success.
 	 * @throws FileNotFoundException FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
 	 * or cannot be opened for any other reason.
 	 * @throws IOException if I/O error(s) occur.
-	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow json syntax or
+	 * @throws IllegalArchiveException if either usersFile or followingFile is not a valid archive (i.e. it does not follow JSON syntax or
 	 * this class' IR).
 	 */
 	public static UserMap fromJSON(final File usersFile, final File followingFile, final File transactionsFile)

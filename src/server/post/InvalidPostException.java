@@ -1,7 +1,7 @@
 package server.post;
 
 /**
- * @brief Exception to be thrown when an attempt is made to instantiate a post with invalid parameters.
+ * Exception to be thrown when an attempt is made to instantiate a post with invalid parameters.
  * @author Giacomo Trapani.
  */
 public class InvalidPostException extends Exception

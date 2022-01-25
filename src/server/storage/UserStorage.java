@@ -8,21 +8,21 @@ import java.util.Map;
 import java.util.Set;
 
 import server.post.Post.GainAndCurators;
-import user.InvalidAmountException;
-import user.InvalidLoginException;
-import user.InvalidLogoutException;
-import user.SameUserException;
-import user.WrongCredentialsException;
+import server.user.InvalidAmountException;
+import server.user.InvalidLoginException;
+import server.user.InvalidLogoutException;
+import server.user.SameUserException;
+import server.user.WrongCredentialsException;
 
 /**
- * @brief Interface to be implemented by an actual user storage class.
+ * Interface to be implemented by an actual user storage class.
  * NOTATION: A stringified User u is defined as a String containing u's username and u's tags following JSON syntax.
  * @author Giacomo Trapani.
  */
 public interface UserStorage
 {
 	/**
-	 * @brief Recovers the set of the usernames of the users the given user is currently followed by.
+	 * Recovers the set of the usernames of the users the given user is currently followed by.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the usernames of every user currently following given user.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -32,7 +32,7 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Updates the rewards of each and every user specified thus adding both author and curator gains.
+	 * Updates the rewards of each and every user specified thus adding both author and curator gains.
 	 * @param gains cannot be null, must contain only registered usernames.
 	 * @param authorPercentage must be in range ]0; 100[.
 	 * @throws InvalidAmountException if any amount specified is not greater than zero.
@@ -43,7 +43,7 @@ public interface UserStorage
 	throws InvalidAmountException, NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt encoded.
+	 * Handles the setup needed for a user to login i.e. it recovers the user's salt encoded.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the decoded salt to use when hashing the password during the login procedure.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -53,7 +53,7 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles login.
+	 * Handles login.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @param clientID cannot be null.
 	 * @param hashPassword cannot be null.
@@ -67,7 +67,7 @@ public interface UserStorage
 	throws InvalidLoginException, NoSuchUserException, WrongCredentialsException, NullPointerException;
 
 	/**
-	 * @brief Handles logout.
+	 * Handles logout.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @param clientID cannot be null.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -78,7 +78,7 @@ public interface UserStorage
 	throws NoSuchUserException, InvalidLogoutException, NullPointerException;
 
 	/**
-	 * @brief Handles list users.
+	 * Handles list users.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return a set of stringified users sharing at least a common tag with the one specified.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -88,7 +88,7 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles list following.
+	 * Handles list following.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return a set of stringified users currently following the one specified.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -98,10 +98,11 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles follow user.
+	 * Handles follow user.
 	 * @param followerUsername cannot be null, must belong to WINSOME registered users' set.
 	 * @param followedUsername cannot be null, must belong to WINSOME registered users' set.
 	 * @return true on success, false on failure.
+	 * @throws SameUserException if follower and followed are the same user.
 	 * @throws NoSuchUserException if at least one of the usernames specified does not belong to WINSOME registered users' set.
 	 * @throws NullPointerException if any parameter is null.
 	 */
@@ -109,7 +110,7 @@ public interface UserStorage
 	throws SameUserException, NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles unfollow user.
+	 * Handles unfollow user.
 	 * @param followerUsername cannot be null, must belong to WINSOME registered users' set.
 	 * @param followedUsername cannot be null, must belong to WINSOME registered users' set.
 	 * @return true on success, false on failure.
@@ -120,7 +121,7 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles get wallet.
+	 * Handles get wallet.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the history of each and every transaction involving given user written in JSON syntax and
 	 * the total amount of WINCOINS currently held by them.
@@ -131,7 +132,7 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles get wallet btc.
+	 * Handles get wallet btc.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the amount of BTC the WINCOINS owned by given user could be exchanged for right now.
 	 * @throws IOException if an I/O error occurs while retrieving current WINCOINS to BTC exchange rate.
@@ -142,12 +143,14 @@ public interface UserStorage
 	throws IOException, NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Backs up WINSOME registered users' set according to json syntax.
-	 * @param file the file to store the list in (will be overwritten).
-	 * @throws FileNotFoundException if the file exists but is a directory rather than a regular file, does not exist but cannot be created,
+	 * Backs up WINSOME registered users' set according to JSON syntax.
+	 * @param usersImmutableDataFile cannot be null.
+	 * @param followingFile cannot be null.
+	 * @param transactionsFile cannot be null.
+	 * @throws FileNotFoundException if any file exists but is a directory rather than a regular file, does not exist but cannot be created,
 	 * or cannot be opened for any other reason.
 	 * @throws IOException if I/O error(s) occur.
-	 * @throws NullPointerException if file is null.
+	 * @throws NullPointerException if any parameter is null.
 	 */
 	public void backupUsers(final File usersImmutableDataFile, final File followingFile, final File transactionsFile)
 	throws FileNotFoundException, IOException, NullPointerException;

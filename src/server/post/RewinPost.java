@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * @brief Class used to represent a Post in WINSOME.
+ * Class used to represent a Post in WINSOME.
  * @author Giacomo Trapani.
  */
 public class RewinPost extends Post
@@ -26,7 +26,7 @@ public class RewinPost extends Post
 		public final String contents;
 
 		/**
-		 * @brief Default constructor for a comment.
+		 * Default constructor for a comment.
 		 * @param author cannot be null or empty.
 		 * @param contents cannot be null or empty.
 		 * @throws InvalidCommentException if any parameter is empty.

@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * @brief Class implementation of RMI callbacks interface using a concurrent hashset.
+ * Class implementation of RMI callbacks interface using a concurrent hashset.
  * @author Giacomo Trapani.
  */
 public class RMIFollowersSet extends UnicastRemoteObject implements RMIFollowers
@@ -17,12 +17,17 @@ public class RMIFollowersSet extends UnicastRemoteObject implements RMIFollowers
 
 	private static final String NULL_ERROR = " cannot be null.";
 
-	/** Default constructor. */
+	/**
+	 * Default constructor.
+	 * @param followers cannot be null or contain a null value.
+	 * @throws RemoteException if a remote error occurs.
+	 * @throws NullPointerException if follower is null or contains null.
+	*/
 	public RMIFollowersSet(Set<String> followers)
 	throws RemoteException, NullPointerException
 	{
 		super();
-		this.followers.addAll(followers);
+		this.followers.addAll(Objects.requireNonNull(followers));
 	}
 
 	public void registerNewFollower(String follower)
@@ -40,7 +45,7 @@ public class RMIFollowersSet extends UnicastRemoteObject implements RMIFollowers
 	}
 
 	/**
-	 * @brief Recovers the set of the usernames of the users following this user.
+	 * Recovers the set of the usernames of the users following this user.
 	 * @param username cannot be null.
 	 * @return a copy of the set of the usernames of the users following this user.
 	 */

@@ -14,7 +14,7 @@ import server.post.Post.GainAndCurators;
 import server.post.Post.Vote;
 
 /**
- * @brief Interface to be implemented by an actual post storage class.
+ * Interface to be implemented by an actual post storage class.
  * NOTATION: a preview of a Post p is defined as { ID, AUTHOR, TITLE }.
  * @author Giacomo Trapani.
  */
@@ -24,7 +24,7 @@ public interface PostStorage
 	public Map<String, GainAndCurators> calculateGains();
 
 	/**
-	 * @brief Handles post creation.
+	 * Handles post creation.
 	 * @param author cannot be null or empty.
 	 * @param title cannot be null or empty or longer than 20 characters.
 	 * @param contents cannot be null or empty or longer than 500 characters.
@@ -38,7 +38,7 @@ public interface PostStorage
 	throws InvalidPostException, InvalidGeneratorException, NullPointerException;
 
 	/**
-	 * @brief Handles blog command.
+	 * Handles blog command.
 	 * @param author cannot be null.
 	 * @return the previews of each and every post written or rewon by author as a set of strings written following JSON syntax.
 	 * @throws NullPointerException if author is null.
@@ -47,7 +47,7 @@ public interface PostStorage
 	throws NullPointerException;
 
 	/**
-	 * @brief Handles show feed command.
+	 * Handles show feed command.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @param users cannot be null.
 	 * @return the previews of each and every post written or rewon by the users username is currently following as a set of strings following JSON syntax.
@@ -58,18 +58,19 @@ public interface PostStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles show post command.
+	 * Handles show post command.
 	 * @param id must belong to the set of registered posts' ids.
 	 * @return post with given ID written following JSON syntax.
+	 * @throws NoSuchPostException if id does not belong to the set of registered posts' ids.
 	 */
 	public String handleShowPost(final int id)
 	throws NoSuchPostException;
 
 	/**
-	 * @brief Handles delete command.
+	 * Handles delete command.
 	 * @param username cannot be null.
 	 * @param id must belong to the set of registered posts' ids.
-	 * @return true on success, false on failure.
+	 * @return true on success, false on failure (i.e. the post is not written by username).
 	 * @throws NoSuchPostException if id does not belong to WINSOME registered posts' set.
 	 * @throws NullPointerException if username is null.
 	 */
@@ -77,10 +78,11 @@ public interface PostStorage
 	throws NoSuchPostException, NullPointerException;
 
 	/**
-	 * @brief Handles rewin command.
+	 * Handles rewin command.
 	 * @param username cannot be null.
+	 * @param users cannot be null.
 	 * @param id must belong to the set of registered posts' ids.
-	 * @return true on success, false on failure.
+	 * @return true on success, false on failure (i.e. the post does not belong to user's feed or it has already been rewon by user).
 	 * @throws NoSuchPostException if id does not belong to WINSOME registered posts' set.
 	 * @throws NullPointerException if any parameter is null.
 	 */
@@ -88,7 +90,7 @@ public interface PostStorage
 	throws NoSuchPostException, NullPointerException;
 
 	/**
-	 * @brief Handles rate command.
+	 * Handles rate command.
 	 * @param username cannot be null.
 	 * @param users cannot be null.
 	 * @param id must belong to the set of registered posts' ids.
@@ -101,10 +103,11 @@ public interface PostStorage
 	throws NoSuchPostException, InvalidVoteException, NullPointerException;
 
 	/**
-	 * @brief Handles add comment command.
+	 * Handles add comment command.
 	 * @param author cannot be null.
 	 * @param users cannot be null.
 	 * @param id must belong to the set of registered posts' ids.
+	 * @param contents cannot be null or empty.
 	 * @throws InvalidCommentException if an attempt is made to commit a comment from the author of given post or
 	 * the post does not show up in author's feed.
 	 * @throws NoSuchPostException if id does not belong to WINSOME registered posts' set.
@@ -114,7 +117,7 @@ public interface PostStorage
 	throws InvalidCommentException, NoSuchPostException, NullPointerException;
 
 	/**
-	 * @brief Backs up posts splitting the data between two files: one will contain their immutable data, the other
+	 * Backs up posts splitting the data between two files: one will contain their immutable data, the other
 	 * the mutable one.
 	 * @param backupPostsImmutableDataFile cannot be null.
 	 * @param backupPostsMutableDataFile cannot be null.

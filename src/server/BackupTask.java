@@ -9,14 +9,13 @@ import server.storage.PostStorage;
 import server.storage.UserStorage;
 
 /**
- * @brief Utility class used to group together the whole backup logic as a single task.
+ * Utility class used to group together the whole backup logic as a single task.
  * @author Giacomo Trapani.
  */
 public class BackupTask implements Runnable
 {
-	/** Milliseconds to be spent sleeping between backups. */
-	public static final int SLEEPINGTIME = 500;
-
+	/** Time between backups. */
+	private final int sleepingTime;
 	/** Users' backup file. */
 	private final File usersFile;
 	/** Users' follows' backup file. */
@@ -36,9 +35,9 @@ public class BackupTask implements Runnable
 	private static final String NULL_ERROR = " cannot be null.";
 
 	/**
-	 * @brief Default constructor.
-	 * @param usersFile cannot be null. It is the file the users' information will be stored in.
-	 * @param followingFile cannot be null. It is the file the users' following information will be stored in.
+	 * Default constructor.
+	 * @param configuration cannot be null.
+	 * @param posts cannot be null.
 	 * @param users cannot be null.
 	 * @throws NullPointerException if any parameter is null.
 	 */
@@ -53,6 +52,7 @@ public class BackupTask implements Runnable
 		this.transactionsFile = new File(configuration.transactionsFilename);
 		this.postsImmutableFile = new File(configuration.postStorageFilename);
 		this.postsReactionsFile = new File(configuration.postsInteractionsStorageFilename);
+		this.sleepingTime = configuration.backupInterval;
 		this.users = users;
 		this.posts = posts;
 	}
@@ -60,9 +60,9 @@ public class BackupTask implements Runnable
 	public void run()
 	{
 		System.out.println("Backup task is now running!");
-		while (true)
+		while (!Thread.currentThread().isInterrupted())
 		{
-			try { Thread.sleep(SLEEPINGTIME); }
+			try { Thread.sleep(sleepingTime); }
 			catch (InterruptedException shouldTerminate) { return; }
 			try
 			{
@@ -71,7 +71,7 @@ public class BackupTask implements Runnable
 			}
 			catch (IOException e)
 			{
-				System.err.printf("Fatal error occurred in BackupTask:\n%s\n", e.getMessage());
+				System.err.println("Fatal error occurred in BackupTask: now aborting...");
 				e.printStackTrace();
 				System.exit(1);
 			}

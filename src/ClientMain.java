@@ -24,8 +24,8 @@ import java.util.stream.Stream;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import api.Command;
-import api.Colors;
+import client.Colors;
+import client.Command;
 import client.MulticastInfo;
 import client.MulticastWorker;
 import client.RMIFollowersSet;
@@ -35,12 +35,12 @@ import server.RMICallback;
 import server.storage.PasswordNotValidException;
 import server.storage.UsernameAlreadyExistsException;
 import server.storage.UsernameNotValidException;
-import user.InvalidTagException;
-import user.TagListTooLongException;
+import server.user.InvalidTagException;
+import server.user.TagListTooLongException;
 
 /**
- * @brief Client file.
- * @author Giacomo Trapani
+ * Client file.
+ * @author Giacomo Trapani.
  */
 
 public class ClientMain
@@ -57,9 +57,9 @@ public class ClientMain
 			this.tags = tags;
 		}
 
-		public static User fromJSON(String jsonString)
+		public static User fromJSON(String JSONString)
 		{
-			return gson.fromJson(jsonString, User.class);
+			return gson.fromJson(JSONString, User.class);
 		}
 	}
 
@@ -79,9 +79,9 @@ public class ClientMain
 			this.title = title;
 		}
 
-		public static PostPreview fromJSON(String jsonString)
+		public static PostPreview fromJSON(String JSONString)
 		{
-			return gson.fromJson(jsonString, PostPreview.class);
+			return gson.fromJson(JSONString, PostPreview.class);
 		}
 	}
 
@@ -119,9 +119,9 @@ public class ClientMain
 			this.comments = comments;
 		}
 
-		public static Post fromJSON(String jsonString)
+		public static Post fromJSON(String JSONString)
 		{
-			return gson.fromJson(jsonString, Post.class);
+			return gson.fromJson(JSONString, Post.class);
 		}
 	}
 
@@ -137,9 +137,9 @@ public class ClientMain
 			this.timestamp = timestamp;
 		}
 
-		public static Transaction fromJSON(String jsonString)
+		public static Transaction fromJSON(String JSONString)
 		{
-			return gson.fromJson(jsonString, Transaction.class);
+			return gson.fromJson(JSONString, Transaction.class);
 		}
 	}
 
@@ -276,8 +276,11 @@ public class ClientMain
 				// Check whether new messages have been received via multicast
 				String message = null;
 				{
-					if (!multicastMessages.isEmpty()) System.out.println("< " + Colors.ANSI_CYAN + "New messages received:" + Colors.ANSI_RESET);
-					while ((message = multicastMessages.poll()) != null) System.out.printf("\t%s\n", message);
+					if (!multicastMessages.isEmpty())
+					{
+						System.out.println("< " + Colors.ANSI_CYAN + "New messages received:" + Colors.ANSI_RESET);
+						while ((message = multicastMessages.poll()) != null) System.out.printf("\t%s\n", message);
+					}
 				}
 				System.out.printf("%s> ", loggedInUsername);
 			}

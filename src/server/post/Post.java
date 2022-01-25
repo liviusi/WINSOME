@@ -6,7 +6,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * @brief Abstract class defining a post in WINSOME.
+ * Abstract class defining a post in WINSOME.
  * @author Giacomo Trapani.
  */
 public abstract class Post
@@ -25,7 +25,7 @@ public abstract class Post
 		}
 
 		/**
-		 * @brief Instantiates a vote given its numerical value.
+		 * Instantiates a vote given its numerical value.
 		 * @param value must belong to { -1, 1 }.
 		 * @return instantiated vote on success, null otherwise.
 		 */
@@ -86,7 +86,10 @@ public abstract class Post
 		return generatorID != null;
 	}
 
-	/** Instantiates generator. */
+	/**
+	 * Instantiates generator.
+	 * @throws InvalidGeneratorException if ID has already been generated.
+	*/
 	public static void generateID()
 	throws InvalidGeneratorException
 	{
@@ -95,7 +98,10 @@ public abstract class Post
 		generatorID = new AtomicInteger(0);
 	}
 
-	/** Instantiates generator given an initial value. */
+	/**
+	 * Instantiates generator given an initial value.
+	 * @throws InvalidGeneratorException if ID has already been generated.
+	*/
 	public static void generateID(final int value)
 	throws InvalidGeneratorException
 	{
@@ -104,7 +110,10 @@ public abstract class Post
 		generatorID = new AtomicInteger(value);
 	}
 
-	/** Getter for next valid ID. This method is thread-safe. */
+	/**
+	 * Getter for next valid ID. This method is thread-safe.
+	 * @throws InvalidGeneratorException if ID has yet to be generated.
+	*/
 	public int getNextID()
 	throws InvalidGeneratorException
 	{
@@ -141,7 +150,7 @@ public abstract class Post
 	public abstract GainAndCurators getGainAndCurators();
 
 	/**
-	 * @brief Adds a rewin from given user to this post. This method is thread-safe.
+	 * Adds a rewin from given user to this post. This method is thread-safe.
 	 * @param username cannot be null.
 	 * @return true on success, false on failure.
 	 * @throws NullPointerException if u is null.
@@ -150,7 +159,7 @@ public abstract class Post
 	throws NullPointerException;
 
 	/**
-	 * @brief Adds a comment with given content from given user to this post.
+	 * Adds a comment with given content from given user to this post.
 	 * @param username cannot be null or this post's author.
 	 * @param contents cannot be null or empty.
 	 * @throws InvalidCommentException if either this post's author and given user are the same or
@@ -161,7 +170,7 @@ public abstract class Post
 	throws InvalidCommentException, NullPointerException;
 
 	/**
-	 * @brief Adds either an upvote or a downvote to this post.
+	 * Adds either an upvote or a downvote to this post.
 	 * @param username cannot be null or this post's author or a user who's already cast a vote for this post.
 	 * @param vote cannot be null.
 	 * @throws InvalidVoteException if given user is this post's author or has already cast a vote for this post.

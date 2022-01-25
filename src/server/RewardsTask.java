@@ -11,10 +11,10 @@ import configuration.ServerConfiguration;
 import server.storage.NoSuchUserException;
 import server.storage.PostStorage;
 import server.storage.UserStorage;
-import user.InvalidAmountException;
+import server.user.InvalidAmountException;
 
 /**
- * @brief Utility class used to group together the whole rewards' logic as a single task.
+ * Utility class used to group together the whole rewards' logic as a single task.
  * @author Giacomo Trapani.
  */
 public class RewardsTask implements Runnable
@@ -36,7 +36,7 @@ public class RewardsTask implements Runnable
 	private final double authorPercentage;
 
 	/**
-	 * @brief Default constructor.
+	 * Default constructor.
 	 * @param users cannot be null.
 	 * @param posts cannot be null.
 	 * @param configuration cannot be null.

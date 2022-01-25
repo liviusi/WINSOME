@@ -1,7 +1,7 @@
 package api;
 
 /**
- * @brief A ResponseCode is issued by the server after handling a client's request.
+ * A ResponseCode is issued by the server after handling a client's request.
  * @author Giacomo Trapani.
  */
 public enum ResponseCode
@@ -18,7 +18,7 @@ public enum ResponseCode
 	private String description = null;
 
 	/**
-	 * @brief Private constructor used to initialize a ResponseCode.
+	 * Private constructor used to initialize a ResponseCode.
 	 * @param description Used to describe the code.
 	 */
 	private ResponseCode(int value, String description)
@@ -27,20 +27,26 @@ public enum ResponseCode
 		this.description = description;
 	}
 
-	/** Getter for the value. */
+	/** 
+	 * Getter for the value.
+	 * @return code's value.
+	*/
 	public int getValue()
 	{
 		return value;
 	}
 
-	/**  Getter for the description. */
+	/**
+	 * Getter for the description.
+	 * @return code's description.
+	*/
 	public String getDescription()
 	{
 		return description;
 	}
 
 	/**
-	 * @brief Instantiates a ResponseCode given its numerical code.
+	 * Instantiates a ResponseCode given its numerical code.
 	 * @param code must be in { 200, 201, 400, 403, 404 }.
 	 * @return ResponseCode corresponding to code, null if there are none. <br>
 	 * 200 -> OK <br>

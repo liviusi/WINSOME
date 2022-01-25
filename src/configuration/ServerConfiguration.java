@@ -9,14 +9,13 @@ import java.net.UnknownHostException;
 import java.util.Properties;
 
 /**
- * @brief Parser for server configuration file.
+ * Parser for server configuration file.
  * @author Giacomo Trapani
 */
 public class ServerConfiguration extends Configuration
 {
 	private static final String MULTICASTADDRESS_STRING = "MULTICASTADDRESS";
 	private static final String PORTNOMULTICAST_STRING = "MULTICASTPORT";
-	private static final String SOCKETTIMEOUT_STRING = "SOCKETTIMEOUT";
 	private static final String COREPOOLSIZE_STRING = "COREPOOLSIZE";
 	private static final String MAXIMUMPOOLSIZE_STRING = "MAXIMUMPOOLSIZE";
 	private static final String KEEPALIVETIME_STRING = "KEEPALIVETIME";
@@ -26,6 +25,7 @@ public class ServerConfiguration extends Configuration
 	private static final String TRANSACTIONSSTORAGE_STRING = "TRANSACTIONSSTORAGE";
 	private static final String POSTSSTORAGE_STRING = "POSTSSTORAGE";
 	private static final String POSTSINTERACTIONSSTORAGE_STRING = "POSTSINTERACTIONSSTORAGE";
+	private static final String BACKUPINTERVAL_STRING = "BACKUPINTERVAL";
 	private static final String REWARDSINTERVAL_STRING = "REWARDSINTERVAL";
 	private static final String REWARDSAUTHORPERCENTAGE_STRING = "REWARDSAUTHORPERCENTAGE";
 	private static final String LOGFILE_STRING = "LOGFILE";
@@ -34,8 +34,6 @@ public class ServerConfiguration extends Configuration
 	public final InetAddress multicastAddress;
 	/** Multicast port number. */
 	public final int portNoMulticast;
-	/** Socket timeout value. */
-	public final int socketTimeout;
 	/** Thread pool core pool size. */
 	public final int corePoolSize;
 	/** Thread pool maximum pool size. */
@@ -54,6 +52,8 @@ public class ServerConfiguration extends Configuration
 	public final String postStorageFilename;
 	/** Filename of the file interactions with posts are to be stored in. */
 	public final String postsInteractionsStorageFilename;
+	/** Interval between backups in msec. */
+	public final int backupInterval;
 	/** Interval (in msec) to wait between rewards' periodic calculation. */
 	public final int rewardsInterval;
 	/** Percentage of the rewards to be sent out to the author of a certain post. */
@@ -77,14 +77,14 @@ public class ServerConfiguration extends Configuration
 		properties.load(fis);
 		fis.close();
 
-		if (properties.containsKey(SOCKETTIMEOUT_STRING) && properties.containsKey(COREPOOLSIZE_STRING) &&
+		if (properties.containsKey(COREPOOLSIZE_STRING) && properties.containsKey(LOGFILE_STRING) &&
 			properties.containsKey(MAXIMUMPOOLSIZE_STRING) && properties.containsKey(KEEPALIVETIME_STRING) &&
 			properties.containsKey(THREADPOOLTIMEOUT_STRING) && properties.containsKey(USERSTORAGE_STRING) &&
 			properties.containsKey(TRANSACTIONSSTORAGE_STRING) && properties.containsKey(FOLLOWINGSTORAGE_STRING)
 			&& properties.containsKey(POSTSSTORAGE_STRING) && properties.containsKey(POSTSINTERACTIONSSTORAGE_STRING)
 			&& properties.containsKey(REWARDSINTERVAL_STRING) && properties.containsKey(MULTICASTADDRESS_STRING)
 			&& properties.containsKey(PORTNOMULTICAST_STRING) && properties.containsKey(REWARDSAUTHORPERCENTAGE_STRING)
-			&& properties.containsKey(LOGFILE_STRING))
+			&& properties.containsKey(BACKUPINTERVAL_STRING))
 		{
 			// validating multicast port number:
 			try { portNoMulticast = parsePortNo(properties.getProperty(PORTNOMULTICAST_STRING)); }
@@ -96,13 +96,6 @@ public class ServerConfiguration extends Configuration
 			try { multicastAddress = InetAddress.getByName(properties.getProperty(MULTICASTADDRESS_STRING)); }
 			catch (UnknownHostException e) { throw new InvalidConfigException(e.getMessage()); }
 			if (!multicastAddress.isMulticastAddress()) throw new InvalidConfigException("Specified multicast address is not in multicast range.");
-			// validating socket timeout:
-			try
-			{
-				socketTimeout = Integer.parseInt(properties.getProperty(SOCKETTIMEOUT_STRING));
-				if (socketTimeout <= 0) throw new InvalidConfigException("Socket timeout must be greater than zero.");
-			}
-			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			// validating core pool size:
 			try
 			{
@@ -142,6 +135,12 @@ public class ServerConfiguration extends Configuration
 			{
 				rewardsAuthorPercentage = Double.parseDouble(properties.getProperty(REWARDSAUTHORPERCENTAGE_STRING));
 				if (rewardsAuthorPercentage <= 0 || rewardsAuthorPercentage >= 100) throw new InvalidConfigException("Author's reward percentage must be in range ]0; 100[.");
+			}
+			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
+			try
+			{
+				backupInterval = Integer.parseInt(properties.getProperty(BACKUPINTERVAL_STRING));
+				if (backupInterval <= 0) throw new InvalidConfigException("Backup interval must be greater than zero.");
 			}
 			catch (NumberFormatException e) { throw new InvalidConfigException(e.getMessage()); }
 			userStorageFilename = properties.getProperty(USERSTORAGE_STRING);

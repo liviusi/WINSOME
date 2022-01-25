@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * @brief Utility class used to handle every communication by the server and from the server.
+ * Utility class used to handle every communication by the server and from the server.
  * @author Giacomo Trapani.
  */
 public class Communication
@@ -16,7 +16,7 @@ public class Communication
 	private Communication() { }
 
 	/**
-	 * @brief Utility function used to receive and parse a valid message into a String. It is to be called if and only if the message expected follows the
+	 * Utility function used to receive and parse a valid message into a String. It is to be called if and only if the message expected follows the
 	 * following syntax: CONCAT(LENGTH, STRING) with LENGTH representing the number of bytes to be read, STRING the message (to be read) and the both of them
 	 * are expected to be properly encoded (STRING is to be encoded with US ASCII).
 	 * @param src channel to read from.
@@ -51,7 +51,7 @@ public class Communication
 	}
 
 	/**
-	 * @brief Utility function used to receive a valid message. It is to be called if and only if the message expected follows the following syntax:
+	 * Utility function used to receive a valid message. It is to be called if and only if the message expected follows the following syntax:
 	 * CONCAT(LENGTH, BYTES) with LENGTH representing the number of bytes to be read (which are expected to be properly encoded), BYTES the message (to be read).
 	 * @param src channel to read from.
 	 * @param buffer used when reading from the channel.
@@ -86,7 +86,7 @@ public class Communication
 	}
 
 	/**
-	 * @brief Utility function used to send a valid message. Its structure will be CONCAT(LENGTH, BYTES) with LENGTH representing the number of bytes written
+	 * Utility function used to send a valid message. Its structure will be CONCAT(LENGTH, BYTES) with LENGTH representing the number of bytes written
 	 * (which are properly encoded), BYTES the message (to be read).
 	 * @param dst channel to write to.
 	 * @param buffer used to write to the channel.

@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import client.RMIFollowers;
 
 /**
- * @brief Class implementing RMI callbacks.
+ * Class implementing RMI callbacks.
  * @author Giacomo Trapani.
  */
 public class RMICallbackService extends UnicastRemoteObject implements RMICallback
@@ -42,7 +42,7 @@ public class RMICallbackService extends UnicastRemoteObject implements RMICallba
 	}
 
 	/**
-	 * @brief Notifies client and registers new follower.
+	 * Notifies client and registers new follower.
 	 * @param follower cannot be null.
 	 * @param followed cannot be null.
 	 * @throws NullPointerException if any parameter is null.

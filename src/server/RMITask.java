@@ -12,7 +12,7 @@ import server.storage.UserMap;
 import server.storage.UserRMIStorage;
 
 /**
- * @brief Utility class used to group together the whole RMI logic as a single task.
+ * Utility class used to group together the whole RMI logic as a single task.
  * @author Giacomo Trapani
  */
 public class RMITask implements Runnable
@@ -36,7 +36,7 @@ public class RMITask implements Runnable
 	private static final String NULL_ERROR = " cannot be null.";
 
 	/**
-	 * @brief Default constructor.
+	 * Default constructor.
 	 * @param configuration cannot be null.
 	 * @param users cannot be null.
 	 * @param callbackService cannot be null.
@@ -70,7 +70,8 @@ public class RMITask implements Runnable
 		}
 		catch (RemoteException e)
 		{
-			System.err.printf("Fatal error occurred:\n%s\n", e.getMessage());
+			System.err.println("Fatal error occurred in RMITask.");
+			e.printStackTrace();
 			System.exit(1);
 		}
 		System.out.println("RMI task is now running!");
@@ -85,7 +86,6 @@ public class RMITask implements Runnable
 			// deallocate resources:
 			r.unbind(registerServiceName);
 			UnicastRemoteObject.unexportObject(users, true);
-			System.out.println("RMI shutdown complete.");
 			return;
 		}
 		catch (NotBoundException | RemoteException ignored) { return; }

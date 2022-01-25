@@ -36,7 +36,7 @@ import server.post.Post.GainAndCurators;
 import server.post.Post.Vote;
 
 /**
- * @brief Post storage backed by a hashmap. This class is thread-safe.
+ * Post storage backed by a hashmap. This class is thread-safe.
  * @author Giacomo Trapani.
  */
 public class PostMap extends Storage implements PostStorage
@@ -78,7 +78,9 @@ public class PostMap extends Storage implements PostStorage
 	public PostMap(int value)
 	throws InvalidGeneratorException
 	{
-		Post.generateID(value);
+		if (!Post.isIDGenerated())
+		try { Post.generateID(); }
+		catch (InvalidGeneratorException concurrentCreation) { throw new ConcurrentModificationException(concurrentCreation); }
 		postsBackedUp = new HashMap<>();
 		postsToBeBackedUp = new HashMap<>();
 		postsByAuthor = new HashMap<>();
@@ -385,7 +387,7 @@ public class PostMap extends Storage implements PostStorage
 	}
 
 	/**
-	 * @brief Recovers a PostMap given the two files used to backup the posts.
+	 * Recovers a PostMap given the two files used to backup the posts.
 	 * @param backupPostsFile cannot be null, must be a valid backup.
 	 * @param backupPostsMetadataFile cannot be null, must be a valid backup.
 	 * @return the recovered PostMap.

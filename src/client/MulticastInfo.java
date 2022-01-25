@@ -8,7 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 /**
- * @brief Utility class used to store a couple (address, port) denoting a valid multicast coordinate.
+ * Utility class used to store a couple (address, port) denoting a valid multicast coordinate.
  * @author Giacomo Trapani.
  */
 public class MulticastInfo
@@ -25,11 +25,17 @@ public class MulticastInfo
 		this.portNo = portNo;
 	}
 
-	/** Parses a valid MulticastInfo instance from a valid JSON message. */
-	public static MulticastInfo fromJSON(String jsonMessage)
+	/**
+	 * Parses a valid MulticastInfo instance from a valid JSON message.
+	 * @param JSONMessage cannot be null.
+	 * @return parsed MulticastInfo.
+	 * @throws NullPointerException if JSONMessage is null.
+	*/
+	public static MulticastInfo fromJSON(String JSONMessage)
+	throws NullPointerException
 	{
 		MulticastInfo m = null;
-		try { m = gson.fromJson(Objects.requireNonNull(jsonMessage, "Message cannot be null."), MulticastInfo.class); }
+		try { m = gson.fromJson(Objects.requireNonNull(JSONMessage, "Message cannot be null."), MulticastInfo.class); }
 		catch (JsonSyntaxException e) { return null; }
 		InetAddress address = m.getAddress();
 		if (address == null || !address.isMulticastAddress()) return null;
@@ -37,7 +43,10 @@ public class MulticastInfo
 		return m;
 	}
 
-	/** Getter for InetAddress. */
+	/**
+	 * Getter for InetAddress.
+	 * @return InetAddress by this name.
+	*/
 	public InetAddress getAddress()
 	{
 		try { return InetAddress.getByName(address); }

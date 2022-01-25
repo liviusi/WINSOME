@@ -7,7 +7,7 @@ import java.util.Base64;
 import java.util.Objects;
 
 /**
- * @brief Utility class used to handle cryptography on WINSOME both by clients and servers.
+ * Utility class used to handle cryptography on WINSOME both by clients and servers.
  * @author Giacomo Trapani.
  */
 public class Passwords
@@ -29,7 +29,7 @@ public class Passwords
 	}
 
 	/**
-	 * @brief Computes the hash of a password combined with a salt.
+	 * Computes the hash of a password combined with a salt.
 	 * @param password cannot be null.
 	 * @param salt cannot be null.
 	 * @return the hash of the password and the salt converted to its String rappresentation.
@@ -47,7 +47,10 @@ public class Passwords
 		return s;
 	}
 
-	/** Generates a new random salt. */
+	/**
+	 * Generates a new random salt.
+	 * @return random salt.
+	*/
 	public static byte[] generateSalt()
 	{
 		byte[] salt = new byte[SALT_LEN];
@@ -55,13 +58,19 @@ public class Passwords
 		return salt;
 	}
 
-	/** Decodes a salt i.e. it transforms a salt from its String rappresentation to a byte array. */
+	/**
+	 * Decodes a salt i.e. it transforms a salt from its String rappresentation to a byte array.
+	 * @return Base64 decoded salt.
+	*/
 	public static byte[] decodeSalt(final String saltEncoded)
 	{
 		return Base64.getDecoder().decode(saltEncoded);
 	}
 
-	/** Encodes a salt i.e. it transforms a salt from byte array to String. */
+	/**
+	 * Encodes a salt i.e. it transforms a salt from byte array to String.
+	 * @return Base64 encoded salt.
+	*/
 	public static String encodeSalt(final byte[] saltDecoded)
 	{
 		return Base64.getEncoder().encodeToString(saltDecoded);

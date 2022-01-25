@@ -59,13 +59,13 @@ import server.storage.PostMap;
 import server.storage.PostStorage;
 import server.storage.UserMap;
 import server.storage.UserStorage;
-import user.InvalidLoginException;
-import user.InvalidLogoutException;
-import user.SameUserException;
-import user.WrongCredentialsException;
+import server.user.InvalidLoginException;
+import server.user.InvalidLogoutException;
+import server.user.SameUserException;
+import server.user.WrongCredentialsException;
 
 /**
- * @brief Server main file.
+ * Server main file.
  * @author Giacomo Trapani
  */
 public class ServerMain
@@ -88,7 +88,7 @@ public class ServerMain
 		final ByteBuffer buffer;
 
 		/**
-		 * @brief Default constructor.
+		 * Default constructor.
 		 * @param client cannot be null.
 		 * @param operation must be either OP_READ or OP_WRITE.
 		 * @param buffer cannot be null.
@@ -154,15 +154,17 @@ public class ServerMain
 			/** Size of the buffer. */
 			int size = BUFFERSIZE;
 			/** Used to parse request. */
-			JsonObject jsonMessage = null;
-			/** Used to parse jsonMessage. */
+			JsonObject JSONMessage = null;
+			/** Used to parse JSONMessage. */
 			JsonElement elem = null;
 			/** Used to build up the answer to be sent back. */
 			ByteArrayOutputStream answerConstructor = new ByteArrayOutputStream();
 			/** Used to read from client. */
 			StringBuilder sb = new StringBuilder();
-			/** Username of the user this client is currently logged in with. */
+			/** Username of the user this client is claiming to be logged in with. */
 			final String username;
+			/** Username of the user this client is currently logged in with. */
+			final String loggedInUsername = loggedInClients.get(client);
 			/** Request message. */
 			String message = null;
 			/** Toggled on if the request has triggered an exception in any of the storages used. */
@@ -174,6 +176,7 @@ public class ServerMain
 						DateTimeFormatter.ofPattern("dd MMM. YYYY - HH:mm:ss").withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault()).format(Instant.now()),
 						Thread.currentThread().getId(), client.hashCode())
 			);
+			if (loggedInUsername != null) logMessageBuilder.append(String.format("[%s]", loggedInUsername));
 
 			buffer.flip();
 			buffer.clear();
@@ -181,6 +184,13 @@ public class ServerMain
 			catch (ClosedChannelException e) { return; }
 			catch (IOException e)
 			{
+				if (loggedInUsername != null)
+				{
+					loggedInClients.remove(client);
+					try { users.handleLogout(loggedInUsername, client); }
+					catch (InvalidLogoutException ignored) { }
+					catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
+				}
 				logMessageBuilder.append(String.format("[I/O ERROR %s][DISCONNECTION]\n", e.getMessage()));
 				try { client.close(); }
 				catch (IOException ignored) { }
@@ -189,15 +199,14 @@ public class ServerMain
 			}
 			if (nRead == -1) // client forcibly disconnected
 			{
-				username = loggedInClients.get(client);
-				if (username != null)
+				if (loggedInUsername != null)
 				{
-					logMessageBuilder.append(String.format("[%s][DISCONNECTION]\n", username));
 					loggedInClients.remove(client);
-					try { users.handleLogout(username, client); }
+					try { users.handleLogout(loggedInUsername, client); }
 					catch (InvalidLogoutException ignored) { }
 					catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 				}
+				logMessageBuilder.append("[DISCONNECTION]\n");
 				try { client.close(); }
 				catch (IOException ignored) { }
 				logQueue.offer(logMessageBuilder.toString());
@@ -206,16 +215,14 @@ public class ServerMain
 			else if (nRead == 0) return;
 			else // read has not failed:
 			{
-				final String loggedInUsername = loggedInClients.get(client);
-				if (loggedInUsername != null) logMessageBuilder.append(String.format("[%s]", loggedInUsername));
 				buffer.flip();
 				buffer.clear();
 				message = sb.toString();
 				/** Code to be appended in the log. */
 				ResponseCode code = null;
 				logMessageBuilder.append(String.format("[%s]", message));
-				jsonMessage = new Gson().fromJson(message, JsonObject.class);
-				elem = jsonMessage.get("command");
+				JSONMessage = new Gson().fromJson(message, JsonObject.class);
+				elem = JSONMessage.get("command");
 				if (elem == null) code = syntaxErrorHandler(answerConstructor);
 				else
 				{
@@ -233,12 +240,12 @@ public class ServerMain
 						}
 						else
 						{
-							elem = jsonMessage.get("username");
+							elem = JSONMessage.get("username");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								username = elem.getAsString();
-								elem = jsonMessage.get("hashedpassword");
+								elem = JSONMessage.get("hashedpassword");
 								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
@@ -291,7 +298,7 @@ public class ServerMain
 						}
 						else
 						{
-							elem = jsonMessage.get("username");
+							elem = JSONMessage.get("username");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -324,7 +331,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.PULLFOLLOWERS.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -369,7 +376,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.LOGOUT.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -405,7 +412,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.LISTUSERS.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -441,7 +448,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.LISTFOLLOWING.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -477,12 +484,12 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.FOLLOWUSER.description))
 					{
-						elem = jsonMessage.get("follower");
+						elem = JSONMessage.get("follower");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("followed");
+							elem = JSONMessage.get("followed");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -533,12 +540,12 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.UNFOLLOWUSER.description))
 					{
-						elem = jsonMessage.get("follower");
+						elem = JSONMessage.get("follower");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("followed");
+							elem = JSONMessage.get("followed");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -589,7 +596,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.VIEWBLOG.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -607,17 +614,17 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.CREATEPOST.description))
 					{
-						elem = jsonMessage.get("author");
+						elem = JSONMessage.get("author");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("title");
+							elem = JSONMessage.get("title");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String title = elem.getAsString();
-								elem = jsonMessage.get("contents");
+								elem = JSONMessage.get("contents");
 								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
@@ -656,7 +663,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.SHOWFEED.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -692,12 +699,12 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.SHOWPOST.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("postid");
+							elem = JSONMessage.get("postid");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -738,12 +745,12 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.DELETEPOST.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("postid");
+							elem = JSONMessage.get("postid");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -797,12 +804,12 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.REWIN.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("postid");
+							elem = JSONMessage.get("postid");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
@@ -856,17 +863,17 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.RATE.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("vote");
+							elem = JSONMessage.get("vote");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String vote = elem.getAsString();
-								elem = jsonMessage.get("postid");
+								elem = JSONMessage.get("postid");
 								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
@@ -907,17 +914,17 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.COMMENT.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
 							username = elem.getAsString();
-							elem = jsonMessage.get("contents");
+							elem = JSONMessage.get("contents");
 							if (elem == null) code = syntaxErrorHandler(answerConstructor);
 							else
 							{
 								final String contents = elem.getAsString();
-								elem = jsonMessage.get("postid");
+								elem = JSONMessage.get("postid");
 								if (elem == null) code = syntaxErrorHandler(answerConstructor);
 								else
 								{
@@ -958,7 +965,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.WALLET.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -994,7 +1001,7 @@ public class ServerMain
 					}
 					else if (elem.getAsString().equals(CommandCode.WALLETBTC.description))
 					{
-						elem = jsonMessage.get("username");
+						elem = JSONMessage.get("username");
 						if (elem == null) code = syntaxErrorHandler(answerConstructor);
 						else
 						{
@@ -1045,7 +1052,7 @@ public class ServerMain
 		}
 
 		/**
-		 * @brief Method used to convert a set to a byte array following the syntax CONCAT(LENGTH, ITEM) with ITEM denoting the item of the set
+		 * Method used to convert a set to a byte array following the syntax CONCAT(LENGTH, ITEM) with ITEM denoting the item of the set
 		 * and LENGTH its length when converted to byte array.
 		 * @param <T> type of the elements of the set.
 		 * @param set set to be converted.
@@ -1072,7 +1079,7 @@ public class ServerMain
 		}
 
 		/**
-		 * @brief Puts a byte array inside a ByteBuffer doubling its size every time this operation is not successful.
+		 * Puts a byte array inside a ByteBuffer doubling its size every time this operation is not successful.
 		 * @param dst buffer the array is to be put in.
 		 * @param buffersize buffer's initial size.
 		 * @param src byte array to be put inside the buffer.

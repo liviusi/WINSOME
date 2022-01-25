@@ -10,10 +10,8 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import api.Colors;
-
 /**
- * @brief Class implementing the task of receiving a new message over multicast.
+ * Class implementing the task of receiving a new message over multicast.
  * @author Giacomo Trapani.
  */
 public class MulticastWorker implements Runnable
@@ -27,8 +25,16 @@ public class MulticastWorker implements Runnable
 
 	private static final String NULL_ERROR = " cannot be null.";
 
-	/** Default constructor */
+	/**
+	 * Default constructor.
+	 * @param multicastSocket cannot be null.
+	 * @param group cannot be null.
+	 * @param isLogged cannot be null.
+	 * @param messages cannot be null.
+	 * @throws NullPointerException if any parameter is null.
+	 */
 	public MulticastWorker(MulticastSocket multicastSocket, InetAddress group, AtomicBoolean isLogged, Queue<String> messages)
+	throws NullPointerException
 	{
 		this.multicastSocket = Objects.requireNonNull(multicastSocket, "MulticastSocket" + NULL_ERROR);
 		this.isLogged = Objects.requireNonNull(isLogged, "AtomicBoolean" + NULL_ERROR);

@@ -8,6 +8,10 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Properties;
 
+/**
+ * Class used to parse client-side configuration file.
+ * @author Giacomo Trapani.
+ */
 public class Configuration
 {
 	private static final String SERVERADDRESS_STRING = "SERVERADDRESS";
