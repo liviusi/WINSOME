@@ -60,7 +60,6 @@ public class RewardsTask implements Runnable
 	public void run()
 	{
 		byte[] bytes = "Rewards have now been calculated!".getBytes(StandardCharsets.US_ASCII);
-		System.out.println(multicastAddress.getHostAddress() + ":" + portNo);
 		while (true)
 		{
 			try { Thread.sleep(interval); }

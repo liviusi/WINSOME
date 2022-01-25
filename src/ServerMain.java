@@ -1133,7 +1133,7 @@ public class ServerMain
 		String configFilename = null;
 		if (args.length == 0)
 		{
-			configFilename = "./configs/server.txt";
+			configFilename = "./configs/server.properties";
 			System.out.printf("No config files have been provided. Default will be used: %s.\n", configFilename);
 		}
 		else configFilename = args[0];
