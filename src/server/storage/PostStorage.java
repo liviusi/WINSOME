@@ -15,6 +15,7 @@ import server.post.Post.Vote;
 
 /**
  * @brief Interface to be implemented by an actual post storage class.
+ * NOTATION: a preview of a Post p is defined as { ID, AUTHOR, TITLE }.
  * @author Giacomo Trapani.
  */
 public interface PostStorage
@@ -39,8 +40,7 @@ public interface PostStorage
 	/**
 	 * @brief Handles blog command.
 	 * @param author cannot be null.
-	 * @return the posts written or rewon by author as a set of strings following the format CONCAT(ID, "\r\n", AUTHOR, "\r\n", TITLE, "\r\n",
-	 * CONTENTS) with AUTHOR the very author of the post, TITLE its title, CONTENT its content.
+	 * @return the previews of each and every post written or rewon by author as a set of strings written following JSON syntax.
 	 * @throws NullPointerException if author is null.
 	 */
 	public Set<String> handleBlog(final String author)
@@ -50,9 +50,7 @@ public interface PostStorage
 	 * @brief Handles show feed command.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @param users cannot be null.
-	 * @return the posts written or rewon by the users username is currently following as a set of strings following
-	 * the format CONCAT(ID, "\r\n", AUTHOR, "\r\n", TITLE, "\r\n", CONTENTS) with AUTHOR the very author of the post,
-	 * TITLE its title, CONTENT its content.
+	 * @return the previews of each and every post written or rewon by the users username is currently following as a set of strings following JSON syntax.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
 	 * @throws NullPointerException if any parameter is null.
 	 */
@@ -62,10 +60,7 @@ public interface PostStorage
 	/**
 	 * @brief Handles show post command.
 	 * @param id must belong to the set of registered posts' ids.
-	 * @return a post written following the format CONCAT(TITLE, "\r\n", CONTENTS, "\r\n", UPVOTES_NO, "\r\n", DOWNVOTES_NO, "\r\n",
-	 * COMMENT_{1}, "\r\n", ..., "\r\n", {COMMENT_n}) with TITLE the title of the post, CONTENTS its contents, UPVOTES_NO the number
-	 * of upvotes it has received, DOWNVOTES_NO the number of downvotes, COMMENT_{i} the i-th comment the post has received;
-	 * a comment follows this format: CONCAT(AUTHOR, "\r\n", CONTENTS) with AUTHOR its author and CONTENTS its contents.
+	 * @return post with given ID written following JSON syntax.
 	 */
 	public String handleShowPost(final int id)
 	throws NoSuchPostException;
@@ -110,7 +105,6 @@ public interface PostStorage
 	 * @param author cannot be null.
 	 * @param users cannot be null.
 	 * @param id must belong to the set of registered posts' ids.
-	 * @param contents cannot be null or contain "\r\n".
 	 * @throws InvalidCommentException if an attempt is made to commit a comment from the author of given post or
 	 * the post does not show up in author's feed.
 	 * @throws NoSuchPostException if id does not belong to WINSOME registered posts' set.

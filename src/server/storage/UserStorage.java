@@ -16,6 +16,7 @@ import user.WrongCredentialsException;
 
 /**
  * @brief Interface to be implemented by an actual user storage class.
+ * NOTATION: A stringified User u is defined as a String containing u's username and u's tags following JSON syntax.
  * @author Giacomo Trapani.
  */
 public interface UserStorage
@@ -30,12 +31,19 @@ public interface UserStorage
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException;
 
+	/**
+	 * @brief Updates the rewards of each and every user specified thus adding both author and curator gains.
+	 * @param gains cannot be null, must contain only registered usernames.
+	 * @param authorPercentage must be in range ]0; 100[.
+	 * @throws InvalidAmountException if any amount specified is not greater than zero.
+	 * @throws NoSuchUserException if there exists at least a user specified in the map which is not registered yet.
+	 * @throws NullPointerException if any parameter is null.
+	 */
 	public void updateRewards(final Map<String, GainAndCurators> gains, final double authorPercentage)
 	throws InvalidAmountException, NoSuchUserException, NullPointerException;
 
 	/**
-	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt
-	 * encoded with US ASCII.
+	 * @brief Handles the setup needed for a user to login i.e. it recovers the user's salt encoded.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
 	 * @return the decoded salt to use when hashing the password during the login procedure.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
@@ -72,9 +80,7 @@ public interface UserStorage
 	/**
 	 * @brief Handles list users.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
-	 * @return a set of strings following the format CONCAT(USERNAME, "\r\n", TAG_{1},...,TAG_{n}) with USERNAME
-	 * representing the username of a user different from the one in input sharing a common interest with it and
-	 * TAG_{i} the i-th tag USERNAME is interested in.
+	 * @return a set of stringified users sharing at least a common tag with the one specified.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
 	 * @throws NullPointerException if username is null.
 	 */
@@ -84,8 +90,7 @@ public interface UserStorage
 	/**
 	 * @brief Handles list following.
 	 * @param username cannot be null, must belong to WINSOME registered users' set.
-	 * @return a set of string following the format CONCAT(USERNAME, "\r\n", TAG_{1},...,TAG_{n}) with USERNAME
-	 * representing the username of a user the one in input is following and TAG_{i} the i-th tag USERNAME is interested in.
+	 * @return a set of stringified users currently following the one specified.
 	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
 	 * @throws NullPointerException if username is null.
 	 */
@@ -114,9 +119,25 @@ public interface UserStorage
 	public boolean handleUnfollowUser(final String followerUsername, final String followedUsername)
 	throws NoSuchUserException, NullPointerException;
 
+	/**
+	 * @brief Handles get wallet.
+	 * @param username cannot be null, must belong to WINSOME registered users' set.
+	 * @return the history of each and every transaction involving given user written in JSON syntax and
+	 * the total amount of WINCOINS currently held by them.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if username is null.
+	 */
 	public Set<String> handleGetWallet(final String username)
 	throws NoSuchUserException, NullPointerException;
 
+	/**
+	 * @brief Handles get wallet btc.
+	 * @param username cannot be null, must belong to WINSOME registered users' set.
+	 * @return the amount of BTC the WINCOINS owned by given user could be exchanged for right now.
+	 * @throws IOException if an I/O error occurs while retrieving current WINCOINS to BTC exchange rate.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if username is null.
+	 */
 	public String handleGetWalletInBitcoin(final String username)
 	throws IOException, NoSuchUserException, NullPointerException;
 

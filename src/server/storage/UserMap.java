@@ -142,7 +142,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 	throws IllegalArgumentException, InvalidAmountException, NoSuchUserException, NullPointerException
 	{
 		Objects.requireNonNull(gains, "Gains" + NULL_ERROR);
-		if (authorPercentage < 0 || authorPercentage > 100) throw new IllegalArgumentException("Author percentage is not a valid percentage.");
+		if (authorPercentage <= 0 || authorPercentage >= 100) throw new IllegalArgumentException("Author percentage is not a valid percentage.");
 
 		User u = null;
 		Transaction t = null;
