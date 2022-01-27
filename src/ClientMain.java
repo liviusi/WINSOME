@@ -24,6 +24,12 @@ import java.util.stream.Stream;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
+import api.rmi.InvalidTagException;
+import api.rmi.PasswordNotValidException;
+import api.rmi.RMICallback;
+import api.rmi.TagListTooLongException;
+import api.rmi.UsernameAlreadyExistsException;
+import api.rmi.UsernameNotValidException;
 import client.Colors;
 import client.Command;
 import client.MulticastInfo;
@@ -31,12 +37,6 @@ import client.MulticastWorker;
 import client.RMIFollowersSet;
 import configuration.Configuration;
 import configuration.InvalidConfigException;
-import server.RMICallback;
-import server.storage.PasswordNotValidException;
-import server.storage.UsernameAlreadyExistsException;
-import server.storage.UsernameNotValidException;
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
 
 /**
  * Client file.
