@@ -1,6 +1,7 @@
 package server.storage;
 
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -8,8 +9,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardOpenOption;
 import java.rmi.RemoteException;
 import java.util.Base64;
 import java.util.HashSet;
@@ -29,6 +32,12 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.stream.JsonReader;
 
+import api.rmi.InvalidTagException;
+import api.rmi.PasswordNotValidException;
+import api.rmi.TagListTooLongException;
+import api.rmi.UserRMIStorage;
+import api.rmi.UsernameAlreadyExistsException;
+import api.rmi.UsernameNotValidException;
 import cryptography.Passwords;
 import server.post.Post.GainAndCurators;
 import server.user.*;
@@ -113,6 +122,24 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		finally { backupLock.readLock().unlock(); }
 	}
 
+	public String usernameToUserString(final String username)
+	throws NoSuchUserException, NullPointerException
+	{
+		Objects.requireNonNull(username, "Username cannot be null");
+
+		try
+		{
+			backupLock.readLock().lock();
+			try
+			{
+				dataAccessLock.readLock().lock();
+				return getUserByName(username).toString();
+			}
+			finally { dataAccessLock.readLock().unlock(); }
+		}
+		finally { backupLock.readLock().unlock(); }
+	}
+
 	public Set<String> recoverFollowers(final String username)
 	throws NoSuchUserException, NullPointerException
 	{
@@ -167,7 +194,7 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 					for (String s: curators)
 					{
 						if ((u = getUserByName(s)) == null) throw new NoSuchUserException(username + NOT_SIGNED_UP);
-						t = new Transaction((gain * (100 - authorPercentage)) / 100);
+						t = new Transaction((gain * (100 - authorPercentage)) / (100 * curators.size()));
 						u.addTransaction(t);
 					}
 				}
@@ -492,147 +519,181 @@ public class UserMap extends Storage implements UserRMIStorage, UserStorage
 		UserMap map = new UserMap();
 		map.usersFirstBackupAndNonEmptyStorage = true;
 
-		InputStream is = new FileInputStream(usersFile);
-		JsonReader reader = new JsonReader(new InputStreamReader(is));
-		
-
-		reader.setLenient(true);
-		reader.beginArray();
-		while (reader.hasNext())
+		try (final InputStream is = new FileInputStream(usersFile); final JsonReader reader = new JsonReader(new InputStreamReader(is)))
 		{
-			reader.beginObject();
-			String name = null;
-			String username = null;
-			String hashPassword = null;
-			byte[] saltDecoded = null;
-			Set<String> tags = null;
-			User u = null;
-			for (int i = 0; i < 4; i++)
+			reader.setLenient(true);
+			try { reader.beginArray(); }
+			catch (EOFException emptyFile)
 			{
-				name = reader.nextName();
-				switch (name)
+				FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				throw new IllegalArchiveException(INVALID_STORAGE);
+			}
+			while (reader.hasNext())
+			{
+				reader.beginObject();
+				String name = null;
+				String username = null;
+				String hashPassword = null;
+				byte[] saltDecoded = null;
+					Set<String> tags = null;
+				User u = null;
+				while (reader.hasNext())
 				{
-					case "username":
+					name = reader.nextName();
+					switch (name)
+					{
+						case "username":
+							username = reader.nextString();
+							break;
+
+						case "hashPassword":
+							hashPassword = reader.nextString();
+							break;
+
+						case "saltDecoded":
+							saltDecoded = Base64.getDecoder().decode(reader.nextString());
+							break;
+
+						case "tags":
+							reader.beginArray();
+							tags = new HashSet<>();
+							while (reader.hasNext())
+							{
+								reader.beginObject();
+								String tmp = reader.nextName();
+								if (!tmp.equals("name")) break;
+								tags.add(reader.nextString());
+								reader.endObject();
+							}
+							reader.endArray();
+							break;
+
+						default:
+							reader.skipValue();
+							break;
+					}
+				}
+				reader.endObject();
+				try { u = new User(username, hashPassword, tags, saltDecoded); }
+				catch (InvalidTagException | TagListTooLongException illegalJSON)
+				{
+					FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+					FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+					FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+					throw new IllegalArchiveException(INVALID_STORAGE);
+				}
+				map.usersBackedUp.put(username, u);
+				map.followersMap.put(u, new HashSet<>());
+			}
+			reader.endArray();
+		}
+		try (final InputStream is = new FileInputStream(followingFile); final JsonReader reader = new JsonReader(new InputStreamReader(is)))
+		{
+			reader.setLenient(true);
+			try { reader.beginArray(); }
+			catch (EOFException emptyFile)
+			{
+				FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				throw new IllegalArchiveException(INVALID_STORAGE);
+			}
+			while (reader.hasNext())
+			{
+				reader.beginObject();
+				String name = null;
+				String username = null;
+				Set<String> following = new HashSet<>();
+				while(reader.hasNext())
+				{
+					name = reader.nextName();
+					if (name.equals("username"))
 						username = reader.nextString();
-						break;
-
-					case "hashPassword":
-						hashPassword = reader.nextString();
-						break;
-
-					case "saltDecoded":
-						saltDecoded = Base64.getDecoder().decode(reader.nextString());
-						break;
-
-					case "tags":
+					else if (name.equals("following"))
+					{
 						reader.beginArray();
-						tags = new HashSet<>();
+						while (reader.hasNext())
+							following.add(reader.nextString());
+						reader.endArray();
+					}
+					for (String s: following)
+					{
+						try
+						{
+							if (!map.handleFollowUser(username, s))
+							{
+								FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
+						}
+						catch (NullPointerException | NoSuchUserException | SameUserException illegalJSON)
+						{
+							FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+							FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+							FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+							throw new IllegalArchiveException(INVALID_STORAGE);
+						}
+					}
+				}
+				reader.endObject();
+			}
+			reader.endArray();
+		}
+		try (final InputStream is = new FileInputStream(transactionsFile); final JsonReader reader = new JsonReader(new InputStreamReader(is)))
+		{
+			reader.setLenient(true);
+			try { reader.beginArray(); }
+			catch (EOFException emptyFile)
+			{
+				FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				throw new IllegalArchiveException(INVALID_STORAGE);
+			}
+			while (reader.hasNext())
+			{
+				reader.beginObject();
+				String name = null;
+				String username = null;
+				JsonObject object = new JsonObject();
+				while (reader.hasNext())
+				{
+					name = reader.nextName();
+					boolean flag = false;
+					if (name.equals("username")) username = reader.nextString();
+					else if (name.equals("transactions"))
+					{
+						reader.beginArray();
 						while (reader.hasNext())
 						{
+							flag = true;
 							reader.beginObject();
-							String tmp = reader.nextName();
-							if (!tmp.equals("name")) break;
-							tags.add(reader.nextString());
+							while (reader.hasNext())
+							{
+								name = reader.nextName();
+								if (name.equals("amount")) object.addProperty(name, reader.nextDouble());
+								else if (name.equals("timestamp")) object.addProperty(name, reader.nextString());
+								else throw new IllegalArchiveException(INVALID_STORAGE);
+							}
 							reader.endObject();
+							if (flag) try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
+							catch (NullPointerException illegalJSON)
+							{
+								FileChannel.open(usersFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(followingFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(transactionsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
 						}
 						reader.endArray();
-						break;
-
-					default:
-						reader.skipValue();
-						break;
-				}
-			}
-			reader.endObject();
-			try { u = new User(username, hashPassword, tags, saltDecoded); }
-			catch (InvalidTagException | TagListTooLongException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-			map.usersBackedUp.put(username, u);
-			map.followersMap.put(u, new HashSet<>());
-		}
-		reader.endArray();
-		reader.close();
-		is.close();
-
-		is = new FileInputStream(followingFile);
-		reader = new JsonReader(new InputStreamReader(is));
-
-		reader.setLenient(true);
-		reader.beginArray();
-		while (reader.hasNext())
-		{
-			reader.beginObject();
-			String name = null;
-			String username = null;
-			Set<String> following = new HashSet<>();
-			for (int i = 0; i < 2; i++)
-			{
-				name = reader.nextName();
-				if (name.equals("username"))
-					username = reader.nextString();
-				else if (name.equals("following"))
-				{
-					reader.beginArray();
-					while (reader.hasNext())
-						following.add(reader.nextString());
-					reader.endArray();
-				}
-				for (String s: following)
-				{
-					try
-					{
-						if (!map.handleFollowUser(username, s))
-							throw new IllegalArchiveException(INVALID_STORAGE);
 					}
-					catch (NullPointerException | NoSuchUserException | SameUserException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
+					else reader.skipValue();
 				}
+				reader.endObject();
 			}
-			reader.endObject();
+			reader.endArray();
 		}
-		reader.endArray();
-		reader.close();
-		is.close();
-
-		is = new FileInputStream(transactionsFile);
-		reader = new JsonReader(new InputStreamReader(is));
-
-		reader.setLenient(true);
-		reader.beginArray();
-		while (reader.hasNext())
-		{
-			reader.beginObject();
-			String name = null;
-			String username = null;
-			JsonObject object = new JsonObject();
-			for (int i = 0; i < 2; i++)
-			{
-				name = reader.nextName();
-				boolean flag = false;
-				if (name.equals("username")) username = reader.nextString();
-				else if (name.equals("transactions"))
-				{
-					reader.beginArray();
-					while (reader.hasNext())
-					{
-						flag = true;
-						reader.beginObject();
-						for (int j = 0; j < 2; j++)
-						{
-							name = reader.nextName();
-							if (name.equals("amount")) object.addProperty(name, reader.nextDouble());
-							else if (name.equals("timestamp")) object.addProperty(name, reader.nextString());
-							else throw new IllegalArchiveException(INVALID_STORAGE);
-						}
-						reader.endObject();
-						if (flag) try { map.getUserByName(username).addTransaction(generator.fromJson(object, Transaction.class)); }
-						catch (NullPointerException illegalJSON) { throw new IllegalArchiveException(INVALID_STORAGE); }
-					}
-					reader.endArray();
-				}
-				else reader.skipValue();
-			}
-			reader.endObject();
-		}
-		reader.endArray();
 
 		for (User u: map.usersBackedUp.values())
 		{

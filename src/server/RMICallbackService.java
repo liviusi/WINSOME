@@ -9,7 +9,8 @@ import java.util.Set;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
-import client.RMIFollowers;
+import api.rmi.RMICallback;
+import api.rmi.RMIFollowers;
 
 /**
  * Class implementing RMI callbacks.

@@ -1,11 +1,8 @@
-package server.storage;
+package api.rmi;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.Set;
-
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
 
 /**
  * Interface for RMI register method.

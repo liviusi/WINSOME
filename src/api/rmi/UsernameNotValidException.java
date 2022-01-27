@@ -1,4 +1,4 @@
-package server.storage;
+package api.rmi;
 
 /**
  * Exception to be thrown when a username does not contain any alphanumeric character.

@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import api.rmi.InvalidTagException;
+import api.rmi.TagListTooLongException;
+
 /**
  * Class used to denote a user registered on WINSOME. This class is thread-safe.
  * @author Giacomo Trapani.

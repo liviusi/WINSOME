@@ -1,4 +1,4 @@
-package server.user;
+package api.rmi;
 
 /**
  * Exception to be thrown when a tag name does not contain any alphanumeric character.

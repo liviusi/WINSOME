@@ -7,6 +7,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import api.rmi.RMIFollowers;
+
 /**
  * Class implementation of RMI callbacks interface using a concurrent hashset.
  * @author Giacomo Trapani.
@@ -46,7 +48,6 @@ public class RMIFollowersSet extends UnicastRemoteObject implements RMIFollowers
 
 	/**
 	 * Recovers the set of the usernames of the users following this user.
-	 * @param username cannot be null.
 	 * @return a copy of the set of the usernames of the users following this user.
 	 */
 	public Set<String> recoverFollowers()

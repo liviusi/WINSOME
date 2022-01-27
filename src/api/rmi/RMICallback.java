@@ -1,9 +1,7 @@
-package server;
+package api.rmi;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-
-import client.RMIFollowers;
 
 /**
  * Server interface for RMI callbacks.

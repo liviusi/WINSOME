@@ -15,13 +15,13 @@ import java.util.Set;
 import api.CommandCode;
 import api.Communication;
 import api.ResponseCode;
+import api.rmi.InvalidTagException;
+import api.rmi.PasswordNotValidException;
+import api.rmi.TagListTooLongException;
+import api.rmi.UserRMIStorage;
+import api.rmi.UsernameAlreadyExistsException;
+import api.rmi.UsernameNotValidException;
 import cryptography.Passwords;
-import server.storage.PasswordNotValidException;
-import server.storage.UserRMIStorage;
-import server.storage.UsernameAlreadyExistsException;
-import server.storage.UsernameNotValidException;
-import server.user.InvalidTagException;
-import server.user.TagListTooLongException;
 
 /**
  * Utility class used to send properly parsed Command-Line commands from the client to the server.

@@ -1,11 +1,15 @@
 package server.storage;
 
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,7 +83,7 @@ public class PostMap extends Storage implements PostStorage
 	throws InvalidGeneratorException
 	{
 		if (!Post.isIDGenerated())
-		try { Post.generateID(); }
+		try { Post.generateID(value); }
 		catch (InvalidGeneratorException concurrentCreation) { throw new ConcurrentModificationException(concurrentCreation); }
 		postsBackedUp = new HashMap<>();
 		postsToBeBackedUp = new HashMap<>();
@@ -410,183 +414,223 @@ public class PostMap extends Storage implements PostStorage
 		Map<Integer, JsonObject> parsedPosts = new HashMap<>();
 
 		// recovering posts' immutable data (a.k.a. id, author, title and contents)
-		InputStream is = new FileInputStream(backupPostsFile);
-		JsonReader reader = new JsonReader(new InputStreamReader(is));
-
-		reader.setLenient(true);
-		reader.beginArray();
-		while (reader.hasNext())
+		try (final InputStream is = new FileInputStream(backupPostsFile); final JsonReader reader = new JsonReader(new InputStreamReader(is)))
 		{
-			reader.beginObject();
-			String name = null;
-			int id = -1;
-			for (int i = 0; i < 4; i++)
+			reader.setLenient(true);
+			try { reader.beginArray(); }
+			catch (EOFException emptyFile)
 			{
-				name = reader.nextName();
-				switch (name)
-				{
-					case "id":
-						id = reader.nextInt();
-						if (parsedPosts.putIfAbsent(id, new JsonObject()) != null) throw new IllegalArchiveException(INVALID_STORAGE);
-						parsedPosts.get(id).addProperty(name, id);
-						break;
-
-					case "author":
-						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
-						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
-						break;
-
-					case "title":
-						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
-						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
-						break;
-
-					case "contents":
-						try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
-						catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
-						break;
-
-					default:
-						throw new IllegalArchiveException(INVALID_STORAGE);
-				}
+				FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				throw new IllegalArchiveException(INVALID_STORAGE);
 			}
-			reader.endObject();
+			while (reader.hasNext())
+			{
+				reader.beginObject();
+				String name = null;
+				int id = -1;
+				while (reader.hasNext())
+				{
+					name = reader.nextName();
+					switch (name)
+					{
+						case "id":
+							id = reader.nextInt();
+							if (parsedPosts.putIfAbsent(id, new JsonObject()) != null)
+							{
+								FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
+							parsedPosts.get(id).addProperty(name, id);
+							break;
+
+						case "author":
+							try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+							catch (NullPointerException e)
+							{
+								FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
+							break;
+
+						case "title":
+							try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+							catch (NullPointerException e)
+							{
+								FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
+							break;
+
+						case "contents":
+							try { parsedPosts.get(id).addProperty(name, reader.nextString()); }
+							catch (NullPointerException e)
+							{
+								FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+								throw new IllegalArchiveException(INVALID_STORAGE);
+							}
+							break;
+
+						default:
+								throw new IllegalArchiveException(INVALID_STORAGE);
+					}
+				}
+				reader.endObject();
+			}
+			reader.endArray();
 		}
-		reader.endArray();
-		reader.close();
-		is.close();
+		
+		if (parsedPosts.isEmpty())
+		{
+			FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+			FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+			return new PostMap();
+		}
 
 		// for (JsonObject o: parsedPosts.values()) System.out.println(o);
 
 		// recovering posts' mutable data
-		is = new FileInputStream(backupPostsMetadataFile);
-		reader = new JsonReader(new InputStreamReader(is));
-
-		reader.setLenient(true);
-		reader.beginArray();
-		while (reader.hasNext())
+		try (final InputStream is = new FileInputStream(backupPostsMetadataFile); final JsonReader reader = new JsonReader(new InputStreamReader(is)))
 		{
-			reader.beginObject();
-			String name = null;
-			int id = -1;
-			int newVotes = -1;
-			int iterations = -1;
-			/** Array of comments (Objects). */
-			JsonArray comments = new JsonArray();
-			/** Array of rewinners (String). */
-			JsonArray rewinners = new JsonArray();
-			/** Array of upvoters (String). */
-			JsonArray upvoters = new JsonArray();
-			/** Array of downvoters (String). */
-			JsonArray downvoters = new JsonArray();
-			/** Maps a username (String) to the number of new comments it has made (Integer). */
-			JsonObject newCommentsBy = new JsonObject();
-			/** Array of new curators (String). */
-			JsonArray newCurators = new JsonArray();
-			for (int i = 0; i < 9; i++)
+			reader.setLenient(true);
+			try { reader.beginArray(); }
+			catch (EOFException emptyFile)
 			{
-				name = reader.nextName();
-				switch (name)
+				FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+				throw new IllegalArchiveException(INVALID_STORAGE);
+			}
+			while (reader.hasNext())
+			{
+				reader.beginObject();
+				String name = null;
+				int id = -1;
+				int newVotes = -1;
+				int iterations = -1;
+				/** Array of comments (Objects). */
+				JsonArray comments = new JsonArray();
+				/** Array of rewinners (String). */
+				JsonArray rewinners = new JsonArray();
+				/** Array of upvoters (String). */
+				JsonArray upvoters = new JsonArray();
+				/** Array of downvoters (String). */
+				JsonArray downvoters = new JsonArray();
+				/** Maps a username (String) to the number of new comments it has made (Integer). */
+				JsonObject newCommentsBy = new JsonObject();
+				/** Array of new curators (String). */
+				JsonArray newCurators = new JsonArray();
+				while (reader.hasNext())
 				{
-					case "id":
-						id = reader.nextInt();
-						//System.out.println("id: " + id);
-						break;
+					name = reader.nextName();
+					switch (name)
+					{
+						case "id":
+							id = reader.nextInt();
+							//System.out.println("id: " + id);
+							break;
 
-					case "rewonBy":
-						reader.beginArray();
-						while (reader.hasNext())
-							rewinners.add(reader.nextString());
-						reader.endArray();
-						//System.out.println("\trewinners:" + rewinners);
-						break;
+						case "rewonBy":
+							reader.beginArray();
+							while (reader.hasNext())
+								rewinners.add(reader.nextString());
+							reader.endArray();
+							//System.out.println("\trewinners:" + rewinners);
+							break;
 
-					case "upvotedBy":
-						reader.beginArray();
-						while (reader.hasNext())
-							upvoters.add(reader.nextString());
-						reader.endArray();
-						//System.out.println("\tupvoters:" + upvoters);
-						break;
+						case "upvotedBy":
+							reader.beginArray();
+							while (reader.hasNext())
+								upvoters.add(reader.nextString());
+							reader.endArray();
+							//System.out.println("\tupvoters:" + upvoters);
+							break;
 
-					case "downvotedBy":
-						reader.beginArray();
-						while (reader.hasNext())
-							downvoters.add(reader.nextString());
-						reader.endArray();
-						//System.out.println("\tdownvoters: " + downvoters);
-						break;
+						case "downvotedBy":
+							reader.beginArray();
+							while (reader.hasNext())
+								downvoters.add(reader.nextString());
+							reader.endArray();
+							//System.out.println("\tdownvoters: " + downvoters);
+							break;
 
-					case "comments":
-						reader.beginArray();
-						while (reader.hasNext())
-						{
-							reader.beginObject();
-							JsonObject comment = new JsonObject();
-							for (int j = 0; j < 2; j++)
+						case "comments":
+							reader.beginArray();
+							while (reader.hasNext())
 							{
-								name = reader.nextName();
-								if (name.equals("author")) comment.addProperty(name, reader.nextString());
-								else if (name.equals("contents")) comment.addProperty(name, reader.nextString());
-								else throw new IllegalArchiveException(INVALID_STORAGE);
+								reader.beginObject();
+									JsonObject comment = new JsonObject();
+								while(reader.hasNext())
+								{
+									name = reader.nextName();
+									if (name.equals("author")) comment.addProperty(name, reader.nextString());
+									else if (name.equals("contents")) comment.addProperty(name, reader.nextString());
+									else throw new IllegalArchiveException(INVALID_STORAGE);
+								}
+								reader.endObject();
+								comments.add(comment);
 							}
+							reader.endArray();
+							//System.out.println("\tcomments: " + comments);
+							break;
+
+						case "newVotes":
+							newVotes = reader.nextInt();
+							break;
+
+						case "newCommentsBy":
+							reader.beginObject();
+							while (reader.hasNext())
+								newCommentsBy.addProperty(reader.nextName(), reader.nextInt());
 							reader.endObject();
-							comments.add(comment);
-						}
-						reader.endArray();
-						//System.out.println("\tcomments: " + comments);
-						break;
+							//System.out.println("\tnewComments: " + newCommentsBy);
+							break;
 
-					case "newVotes":
-						newVotes = reader.nextInt();
-						break;
+						case "newCurators":
+							reader.beginArray();
+							while (reader.hasNext())
+								newCurators.add(reader.nextString());
+							reader.endArray();
+							//System.out.println("\tnewCurators: " + newCurators);
+							break;
 
-					case "newCommentsBy":
-						reader.beginObject();
-						while (reader.hasNext())
-							newCommentsBy.addProperty(reader.nextName(), reader.nextInt());
-						reader.endObject();
-						//System.out.println("\tnewComments: " + newCommentsBy);
-						break;
+						case "iterations":
+							iterations = reader.nextInt();
+							break;
 
-					case "newCurators":
-						reader.beginArray();
-						while (reader.hasNext())
-							newCurators.add(reader.nextString());
-						reader.endArray();
-						//System.out.println("\tnewCurators: " + newCurators);
-						break;
-
-					case "iterations":
-						iterations = reader.nextInt();
-						break;
-
-					default:
-						throw new IllegalArchiveException(INVALID_STORAGE);
+						default:
+							FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+							FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+							throw new IllegalArchiveException(INVALID_STORAGE);
+					}
+				}
+				reader.endObject();
+				try
+				{
+					// filling up the JsonObject with all the fields.
+					parsedPosts.get(id).add("rewonBy", rewinners);
+					parsedPosts.get(id).add("upvotedBy", upvoters);
+					parsedPosts.get(id).add("downvotedBy", downvoters);
+					parsedPosts.get(id).add("comments", comments);
+					parsedPosts.get(id).addProperty("newVotes", newVotes);
+					parsedPosts.get(id).add("newCommentsBy", newCommentsBy);
+					parsedPosts.get(id).add("newCurators", newCurators);
+					parsedPosts.get(id).addProperty("iterations", iterations);
+				}
+				catch (NullPointerException e)
+				{
+					FileChannel.open(backupPostsFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+					FileChannel.open(backupPostsMetadataFile.toPath(), StandardOpenOption.WRITE).truncate(0).close();
+					throw new IllegalArchiveException(INVALID_STORAGE);
 				}
 			}
-			reader.endObject();
-			try
-			{
-				// filling up the JsonObject with all the fields.
-				parsedPosts.get(id).add("rewonBy", rewinners);
-				parsedPosts.get(id).add("upvotedBy", upvoters);
-				parsedPosts.get(id).add("downvotedBy", downvoters);
-				parsedPosts.get(id).add("comments", comments);
-				parsedPosts.get(id).addProperty("newVotes", newVotes);
-				parsedPosts.get(id).add("newCommentsBy", newCommentsBy);
-				parsedPosts.get(id).add("newCurators", newCurators);
-				parsedPosts.get(id).addProperty("iterations", iterations);
-			}
-			catch (NullPointerException e) { throw new IllegalArchiveException(INVALID_STORAGE); }
+			reader.endArray();
 		}
-		reader.endArray();
-		reader.close();
-		is.close();
 
 		// for (JsonObject o: parsedPosts.values()) System.out.println(o);
 
-		PostMap map = new PostMap(parsedPosts.size()); // Posts with IDs up to parsedPosts' size have already been generated.
+		PostMap map = new PostMap(parsedPosts.keySet().stream().max(Comparator.naturalOrder()).orElse(0)); // Posts with IDs up to parsedPosts' max id have already been generated.
 		map.flag = true; // instantiated from a backup
 		
 		/** Used to handle the recovery of the parsed RewinPosts. */

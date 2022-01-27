@@ -7,9 +7,9 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Objects;
 
+import api.rmi.UserRMIStorage;
 import configuration.ServerConfiguration;
 import server.storage.UserMap;
-import server.storage.UserRMIStorage;
 
 /**
  * Utility class used to group together the whole RMI logic as a single task.

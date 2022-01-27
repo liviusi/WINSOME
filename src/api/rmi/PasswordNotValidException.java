@@ -1,4 +1,4 @@
-package server.storage;
+package api.rmi;
 
 /**
  * Exception to be thrown when a password is not valid (i.e. is an empty string).

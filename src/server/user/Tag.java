@@ -3,6 +3,8 @@ package server.user;
 import java.util.Locale;
 import java.util.Objects;
 
+import api.rmi.InvalidTagException;
+
 /**
  * Class used to identify a tag i.e. an interest expressed by a certain user.
  * @author Giacomo Trapani.

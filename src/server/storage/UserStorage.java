@@ -32,6 +32,16 @@ public interface UserStorage
 	throws NoSuchUserException, NullPointerException;
 
 	/**
+	 * Converts a user to a stringified user.
+	 * @param username cannot be null, must belong to WINSOME registered users' set.
+	 * @return Stringified user.
+	 * @throws NoSuchUserException if username does not belong to WINSOME registered users' set.
+	 * @throws NullPointerException if username is null.
+	 */
+	public String usernameToUserString(final String username)
+	throws NoSuchUserException, NullPointerException;
+
+	/**
 	 * Updates the rewards of each and every user specified thus adding both author and curator gains.
 	 * @param gains cannot be null, must contain only registered usernames.
 	 * @param authorPercentage must be in range ]0; 100[.
