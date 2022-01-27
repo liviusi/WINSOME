@@ -6,7 +6,7 @@ OUTPUTDIR = -d ./bin
 
 .DEFAULT_GOAL := build
 
-.PHONY: clean docs
+.PHONY: clean
 
 TARGETS = client server build all
 
@@ -23,7 +23,7 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/cryptography/Passwords.java $(OUTPUTDIR)
 
 .InvalidTagException:
-	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidTagException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/InvalidTagException.java $(OUTPUTDIR)
 
 .Tag: .InvalidTagException
 	$(JC) $(CP) $(JFLAGS) src/server/user/Tag.java $(OUTPUTDIR)
@@ -35,7 +35,7 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/server/user/InvalidLogoutException.java $(OUTPUTDIR)
 
 .TagListTooLongException:
-	$(JC) $(CP) $(JFLAGS) src/server/user/TagListTooLongException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/TagListTooLongException.java $(OUTPUTDIR)
 
 .WrongCredentialsException:
 	$(JC) $(CP) $(JFLAGS) src/server/user/WrongCredentialsException.java $(OUTPUTDIR)
@@ -71,10 +71,10 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/server/post/RewinPost.java $(OUTPUTDIR)
 
 .PasswordNotValidException:
-	$(JC) $(CP) $(JFLAGS) src/server/storage/PasswordNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/PasswordNotValidException.java $(OUTPUTDIR)
 
 .UsernameAlreadyExistsException:
-	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameAlreadyExistsException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/UsernameAlreadyExistsException.java $(OUTPUTDIR)
 
 .IllegalArchiveException:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/IllegalArchiveException.java $(OUTPUTDIR)
@@ -83,10 +83,10 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/server/storage/NoSuchUserException.java $(OUTPUTDIR)
 
 .UsernameNotValidException:
-	$(JC) $(CP) $(JFLAGS) src/server/storage/UsernameNotValidException.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/UsernameNotValidException.java $(OUTPUTDIR)
 
 .UserRMIStorage: .PasswordNotValidException .UsernameAlreadyExistsException .UsernameNotValidException .User .NoSuchUserException
-	$(JC) $(CP) $(JFLAGS) src/server/storage/UserRMIStorage.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/UserRMIStorage.java $(OUTPUTDIR)
 
 .Storage:
 	$(JC) $(CP) $(JFLAGS) src/server/storage/Storage.java $(OUTPUTDIR)
@@ -116,7 +116,7 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/server/LoggingTask.java $(OUTPUTDIR)
 
 .RMIFollowers:
-	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowers.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/RMIFollowers.java $(OUTPUTDIR)
 
 .MulticastInfo:
 	$(JC) $(CP) $(JFLAGS) src/client/MulticastInfo.java $(OUTPUTDIR)
@@ -128,7 +128,7 @@ TARGETS = client server build all
 	$(JC) $(CP) $(JFLAGS) src/client/RMIFollowersSet.java $(OUTPUTDIR)
 
 .RMICallback: .RMIFollowers
-	$(JC) $(CP) $(JFLAGS) src/server/RMICallback.java $(OUTPUTDIR)
+	$(JC) $(CP) $(JFLAGS) src/api/rmi/RMICallback.java $(OUTPUTDIR)
 
 .RMICallbackService: .RMICallback
 	$(JC) $(CP) $(JFLAGS) src/server/RMICallbackService.java $(OUTPUTDIR)
@@ -163,8 +163,8 @@ server: .ServerConfiguration .Passwords .User .RMITask .CommandCode .BackupTask 
 all: clean build
 
 build: server client
-	cd bin && jar -cevf ServerMain.class ../build/ServerMain.jar -C . api client configuration cryptography server server/post server/storage server/user && cd ..
-	cd bin && jar -cevf ./bin/ClientMain ../build/ClientMain.jar -C . cryptography/ configuration/ client/ api/ server/user/ && cd ..
+	cd bin && jar -cevf ServerMain ../build/ServerMain.jar -C . api client configuration cryptography server server/post server/storage server/user && cd ..
+	cd bin && jar -cevf ClientMain ../build/ClientMain.jar -C . cryptography/ configuration/ client/ api/ server/user/ && cd ..
 
 clean:
 	rm -rf ./bin/* ./build/*.jar
