@@ -7,7 +7,6 @@ package api;
 public enum ResponseCode
 {
 	OK(200, "200\r\n"),
-	CREATED(201, "201\r\n"),
 	BAD_REQUEST(400, "400\r\n"),
 	FORBIDDEN(403, "403\r\n"),
 	NOT_FOUND(404, "404\r\n");
@@ -49,11 +48,10 @@ public enum ResponseCode
 	 * Instantiates a ResponseCode given its numerical code.
 	 * @param code must be in { 200, 201, 400, 403, 404 }.
 	 * @return ResponseCode corresponding to code, null if there are none. <br>
-	 * 200 -> OK <br>
-	 * 201 -> CREATED <br>
-	 * 400 -> BAD REQUEST <br>
-	 * 403 -> FORBIDDEN <br>
-	 * 404 -> NOT FOUND <br>
+	 * 200: OK <br>
+	 * 400: BAD REQUEST <br>
+	 * 403: FORBIDDEN <br>
+	 * 404: NOT FOUND <br>
 	 */
 	public static ResponseCode fromCode(int code)
 	{
@@ -62,10 +60,6 @@ public enum ResponseCode
 		{
 			case 200:
 				r = OK;
-				break;
-
-			case 201:
-				r = CREATED;
 				break;
 
 			case 400:
