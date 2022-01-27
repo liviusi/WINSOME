@@ -41,9 +41,9 @@
   {0pt} % <sep>
   {} % <before code>
 \renewcommand{\thesection}{} % Remove section references...
-\renewcommand{\thesubsection}{\arabic{subsection}} %... from subsections
+\renewcommand{\thesection}{\arabic{section}} %... from sections
 
-% Numbered subsections
+% Numbered sections
 \setcounter{secnumdepth}{3}
 
 % Prevents LaTeX from filling out a page to the bottom
@@ -164,7 +164,8 @@
 
 	\pagebreak
 \end{titlepage}
-\subsection{Premessa.}
+
+\section*{Premessa.}
 Il progetto consiste nella progettazione e realizzazione di un Social Network chiamato \textbf{WINSOME} ispirato a STEEMIT e che prevede
 ricompense in una valuta chiamata \textbf{WINCOIN} per i propri utenti. L'architettura utilizzata \`e di tipo ``client-server'': il client
 comunica attraverso la rete le proprie richieste al server.
@@ -189,11 +190,99 @@ Per l'esecuzione vengono messi a disposizione due script \mono{run_client.sh} e 
 di avviare l'esecuzione del client e del server (per entrambi, procedono anche alla compilazione nel caso in cui questa non sia ancora
 avvenuta).
 
-\subsection{Server.}
-Il server dipende dal file di configurazione di cui si passa il path da linea di comando (in caso
-contrario, prover\`a a usare il file di configurazione \mono{./configs/server.properties});
-il file passato dovr\`a essere del seguente tipo:
+\section*{Struttura del progetto: i packages.}
+Il progetto si articola in pi\`u packages, ognuno con delle funzioni ben definite:
+\subsection*{api}
+Il package contiene metodi e classi \textbf{condivise dal client e dal server}:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{CommandCode}: contiene le definizioni dei codici che identificano univocamente un comando inviato dal client al server.
+	\item \mono{Communication}: contiene le definizioni dei metodi che implementano il protocollo di comunicazione usato tra client e
+	server. Si prevedono i seguenti passaggi per il mittente:
+	\begin{itemize}
+		\item Si trasforma il messaggio in una stringa S leggibile dal destinatario, si distinguono due casi:
+		\begin{itemize}
+			\item Il messaggio contiene una entit\`a (e.g. il server sta inviando al client un post, il client sta inviando una richiesta
+			al server). In questo caso, il messaggio viene trasformato in un dato JSON.
+			\item Il messaggio non contiene una entit\`a, \`e il caso dei messaggi di risposta inviati dal server al client per tutte
+			quelle operazioni per cui viene richiesto dalla specifica di restituirne solo l'esito. In questo caso, non si fa nulla.
+		\end{itemize}
+		\item Si codifica S in US\_ASCII, l'output \`e un vettore B di bytes.
+		\item Si antepone a B un valore intero che ne indichi la lunghezza, ottenendo un nuovo messaggio M.
+		\item Si invia M al destinatario.
+	\end{itemize}
+	Il destinatario compie i seguenti passaggi:
+	\begin{itemize}
+		\item Legge un valore intero dal messaggio M ricevuto.
+		\item Decodifica il messaggio ricevuto, si distinguono due casi:
+		\begin{itemize}
+			\item Il messaggio contiene una entit\`a: nuovamente, si distinguono due casi:
+			\begin{itemize}
+				\item Il messaggio proviene dal server: il messaggio sar\`a formato da un solo dato JSON o da una serie di dati JSON.
+				Nel secondo caso, a ogni dato il mittente avr\`a anteposto la lunghezza del vettore di bytes ricavato dalla sua
+				codifica: si usa questa informazione per determinare inequivocabilmente i confini di ciascuno.
+				\item Il messaggio proviene dal client: il messaggio sar\`a formato da un solo dato JSON.
+			\end{itemize}
+			\item Il messaggio non contiene una entit\`a: in questo caso, si legge la stringa ricevuta.
+		\end{itemize}
+	\end{itemize}
+	Ovviamente, per entrambi (sia mittente sia destinatario) risulta necessario conoscere il formato del dato JSON ricevuto.
+	\item \mono{ResponseCode}: contiene la definizione del formato dei messaggi di risposta inviati dal server: ognuno di questi
+	sar\`a formato da un codice che ne indichi l'esito, il separatore CRLF e una Stringa che ne forma il corpo. Nel caso in cui
+	il messaggio di risposto abbia un codice diverso da OK (200), il corpo del messaggio sar\`a sempre e solo la descrizione
+	dell'errore avvenuto nell'elaborazione della richiesta.
+\end{itemize}
+Inoltre contiene il package \textbf{rmi}, dedicato alle interfacce delle classi remote utilizzate per RMI e dalle eccezioni checked
+che vengono lanciate dai metodi remoti:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{RMICallback}: interfaccia per le callbacks RMI implementata dal server.
+	\item \mono{RMIFollowers}: interfaccia per le callbacks RMI implementata dal client.
+	\item \mono{UserRMIStorage}: interfaccia per il metodo remoto \mono{register} utilizzato per registrare un utente a WINSOME.
+	\item Le altre classi sono tutte e sole le eccezioni checked lanciate dal metodo register.
+\end{itemize}
+
+\subsection*{client.}
+Il package contiene le classi e i metodi utilizzati \textbf{solo dal client}:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{Colors}: contiene le costanti utilizzate per stampare stringhe colorate sul terminale.
+	\item \mono{Command}: contiene le definizioni dei metodi che:
+	\begin{itemize}
+		\item trasformano le richieste inviate da CLI dal client in un formato leggibile dal server;
+		\item ricevono la risposta dal server e la gestiscono adeguatamente:
+		\begin{itemize}
+			\item Se il messaggio di risposta contiene una entit\`a, modificano le strutture dati in input in modo tale da poterle
+			salvare.
+			\item Se il messaggio di risposta non contiene una entit\`a, decide - sulla base di un flag booleano - se stampare o meno
+			su STDOUT il messaggio di risposta.
+		\end{itemize}
+	\end{itemize}
+	\item \mono{MulticastInfo}: corrisponde al dato JSON che viene inviato dal server al client quando viene richiesta l'operazione di
+	``RETRIEVEMULTICAST''.
+	\item \mono{MulticastWorker}: implementa le funzionalit\`a di un thread worker che resta in ascolto di nuovi messaggi sul canale di
+	Multicast.
+	\item \mono{Response}: classe dichiarata package private che implementa il parsing del corpo di un messaggio di risposta
+	(che si ricorda poter essere - in concreto - o una \mono{String} o un \mono{Set<String>}).
+	\item \mono{RMIFollowersSet}: classe che implementa il meccanismo di RMI callback per il client.
+\end{itemize}
+Logicamente, disaccoppiare il package client dal package api permette di separare il pi\`u possibile i moduli del progetto e di
+utilizzare - eventualmente - un client differente che chiami le funzioni della API sopra definita.
+
+\subsection*{configuration}
+Il package contiene le classi (e le eccezioni lanciate da queste) che si occupano del \textbf{parsing del file di configurazione}.
+
+Innanzitutto, si definisce il formato del file di configurazione per il client e per il server:
 \begin{lstlisting}[style=code]
+# CLIENT
+SERVERADDRESS=<valid_server_address>
+TCPPORT=<tcp_port>
+UDPPORT=<udp_port>
+REGISTRYHOST=<rmi_registry_host>
+REGISTRYPORT=<rmi_registry_port>
+REGISTERSERVICENAME=<register_service_name>
+CALLBACKSERVICENAME=<callback_service_name>
+\end{lstlisting}
+\pagebreak
+\begin{lstlisting}[style=code]
+# SERVER
 SERVERADDRESS=<valid_server_address>
 TCPPORT=<tcp_port>
 UDPPORT=<udp_port>
@@ -221,29 +310,107 @@ I parametri possono essere in qualsiasi ordine, non vengono ammessi argomenti no
 stringhe dove ci si aspetterebbe un valore numerico) e nessuno \`e opzionale. La sintassi adottata \`e quella dei file
 \href{https://en.wikipedia.org/wiki/.properties}{properties}.
 
-\paragraph*{Struttura interna.}
+Le classi all'interno del package sono le seguenti:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{Configuration}: si occupa del parsing del file di configurazione usato dal client.
+	\item \mono{InvalidConfigException}: eccezione checked lanciata se il file di configurazione non rispetta la sintassi menzionata sopra.
+	\item \mono{ServerConfiguration}: si occupa del parsing del file di configurazione usato dal server.
+\end{itemize}
+
+\subsection*{server}
+Il package contiene le classi e i metodi utilizzati \textbf{solo dal server}.
+Si parte analizzando i package \mono{user}, \mono{post} e \mono{storage}. Si rimanda la descrizione delle altre classi alla sezione
+dedicata alla descrizione del server.
+
+\subsubsection*{user}
+Il package contiene le classi e i metodi utilizzati all'\textbf{interno del server} per la \textbf{gestione di un utente}:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{Tag}: contiene la definizione dei tag, ossia gli interessi relativi a un utente.
+	\item \mono{Transaction}: contiene la definizione delle transazioni.
+	\item \mono{User}: contiene la definizione di un utente all'interno di WINSOME. I metodi messi a disposizione fanno uso di blocchi
+	``synchronized'' all'interno delle sezioni critiche in modo tale da poter permettere accessi in mutua esclusione (allo stesso
+	oggetto di tipo User) a thread concorrenti. La classe \`e dunque thread-safe.
+	\item Le altre classi sono le eccezioni checked lanciate dalle tre classi sopra menzionate.
+\end{itemize}
+
+\subsubsection*{post}
+Il package contiene le classi e i metodi utilizzati all'\textbf{interno del server} per la \textbf{gestione di un post}:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{Post}: classe astratta che descrive lo scheletro di un post all'interno di WINSOME. Definisce la logica per la generazione
+	degli identificativi univoci dei nuovi post: facendo uso di un \mono{Atomic Integer} si permettono creazioni concorrenti di
+	nuovi post da parte di pi\`u thread.
+	\item \mono{RewinPost}: implementa i metodi definiti nella classe astratta Post. Si noti come, poich\'e per il calcolo dei guadagni
+	risulta necessario mantenere consistente lo stato di pi\`u parametri interni (nello specifico, \mono{newVotes}, \mono{newCommentsBy},
+	\mono{newCurators} e \mono{iterations}), si renda necessaria l'implementazione di un meccanismo di mutua esclusione per tutti e
+	soli i metodi che modificano almeno uno di questi (gestita dichiarando i metodi \mono{getGainAndCurators}, \mono{addComment}
+	e \mono{addVote} ``synchronized''). Tutti gli altri metodi che vanno a leggere o modificare lo stato interno di uno stesso post
+	lavorano su variabili di tipo \mono{ConcurrentHashMap} o suoi derivati, quindi la classe risulta thread safe.
+\end{itemize}
+
+\subsubsection*{storage}
+Il package contiene le classi e i metodi utilizzati all'\textbf{interno del server} per la \textbf{gestione dello storage}:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item \mono{UserStorage}, \mono{PostStorage}: interfacce che dichiarano i metodi che degli storage rispettivamente di utenti
+	e di post devono implementare.
+	\item \mono{Storage}: classe dichiarata package private che definisce due metodi per il backup: \mono{backupCached} che
+	implementa un meccanismo di caching scrivendo in append nel file specificato tutti e soli i dati dichiarati nuovi (non va a verificare
+	che questi siano veramente nuovi per non perdere in efficienza) e \mono{backupNonCached} che sovrascrive l'intero file specificato
+	andando a salvare tutti i dati. Usa \mono{Gson} per convertire ogni elemento dello storage in un dato JSON valido.
+	\item \mono{UserMap}: classe che utilizza tabelle hash per effettuare lo storing di oggetti di tipo User al proprio interno.
+	Si noti come utilizzare le tabelle hash \mono{interestsMap} e \mono{followersMap} in aggiunta alla tabella che salva gli utenti
+	permetta di ridurre a \(O(1)\) la complessit\`a algoritmica in tempo di tutti i metodi messi a disposizione (nonostante si vada
+	a introdurre una ridondanza nella rappresentazione dei dati e a ``distribuire'' lo stato interno dello storage su pi\`u variabili).
+
+	Poich\'e alcuni metodi modificano lo stato interno dello storage (nello specifico si tratta di \mono{register},
+	\mono{handleFollowUser}, \mono{handleUnfollowUser} e \mono{backupUsers}), si sceglie di gestire la concorrenza introducendo due
+	``strati" di \mono{ReentrantReadWriteLock}: il primo corrisponde a \mono{backupLock}, acquisita in lettura da tutti
+	i metodi a eccezione di quello per il backup e il secondo a \mono{dataAccessLock}, acquisita in scrittura da tutti e soli i metodi che
+	modificano lo stato interno dello storage. La prima lock risulta necessaria poich\'e la classe implementa un meccanismo di caching e,
+	durante il backup, deve trasferire nei dati cached i dati nuovi (i.e. spostarli da \mono{usersToBeBackedUp} a \mono{usersBackedUp}).
+
+	Infine, si vada a notare come modificare lo stato interno di un certo utente non corrisponda a modificare lo stato dello
+	storage: aggiungendo a questo la classe User sia thread safe, concludiamo che la classe \`e thread safe.
+	\item \mono{PostMap}: classe che utilizza tabelle hash per effettuare lo storing di oggetti di tipo Post al proprio interno.
+	Anche in questa classe si introduce ridondanza (con le mappa \mono{postsByAuthor}) per ridurre a \(O(1)\) la complessit\`a algoritmica
+	in tempo dei metodi messi a disposizione.
+
+	Per la concorrenza, vale lo stesso discorso che per la classe UserMap: la differenza sta nel fatto che i metodi in gioco siano
+	\mono{handleCreatePost}, \mono{handleDeletePost} (che forza anche un ``flush della cache" al backup successivo), \mono{handleRewin} e
+	\mono{backupPosts}.
+
+	Come prima, si noti come modificare lo stato interno di un post non corrisponda a modificare lo stato dello storage: dunque,
+	anche questa classe risulta thread safe.
+\end{itemize}
+
+
+\section{Server.}
+Il server dipende dal file di configurazione di cui si passa il path da linea di comando (in caso
+contrario, prover\`a a usare il file di configurazione \mono{./configs/server.properties}).
+
+\subsection*{Struttura interna.}
 Al momento dell'avvio, il server - sulla base dei parametri specificati nel file di configurazione - eventualmente ripristina utenti e post
 precedentemente caricati e inizializza le proprie strutture dati: tra queste si menzionano un thread pool dedicato alla gestione delle
 richieste provenienti dai client connessi, dei thread dedicati per il setup di RMI, Multicast, Logging e Backup
 (non sottomessi al pool), un insieme concorrente utilizzato dai thread per condividere informazioni sui client e uno shutdown hook per
 gestire correttamente la terminazione (che - tipicamente - avviene inviando SIGINT).
 
-Il server funziona seguendo il modello ``manager-worker''; il manager (ossia il \mono{Main}) si mette in ascolto utilizzando un \mono{Selector}
-(dunque, si usano sia \textbf{NIO} sia il \textbf{Thread pooling}) e si occupa di accettare nuove connessioni. Ogniqualvolta un canale
-risulta essere pronto in lettura o scrittura, istanzia un thread worker dedicato e lo sottomette al thread pool (nel caso in cui il canale
-sia disponibile in lettura, si occupa anche di istanziare un buffer da utilizzare per la gestione della richiesta).
+Il server funziona seguendo il modello ``manager-worker''; il manager (ossia il \mono{Main}) si mette in ascolto utilizzando un
+\mono{Selector} (dunque, si usano sia il \textbf{multiplexing} sia il \textbf{Thread pooling}) e si occupa di accettare nuove connessioni.
+Ogniqualvolta un canale risulta essere pronto in lettura o scrittura, istanzia un thread worker dedicato e lo sottomette al thread
+pool (nel caso in cui il canale sia disponibile in lettura, si occupa anche di istanziare un buffer da utilizzare per la gestione
+della richiesta).
 
-\paragraph*{Thread: RMITask.}
+\subsection*{Thread: RMITask.}
 Un thread \mono{RMITask} viene istanziato per la gestione di RMI. Provvede a esportare lo storage degli utenti e pubblicare il riferimento
 all'oggetto remoto e, se avvenuta con successo, si mette in idle chiamando una \mono{sleep} all'interno di un ciclo infinito; ricevuta
 una \mono{interrupt}, si risveglia, libera le risorse allocate e termina.
 
-\paragraph*{Thread: RewardsTask.}
+\subsection*{Thread: RewardsTask.}
 Un thread \mono{RewardsTask} viene istanziato per il calcolo periodico delle ricompense e il conseguente invio del messaggio (di avvenuto
-calcolo) via UDP Multicast. La periodicit\`a viene implementata eseguendo una \mono{sleep} per l'intervallo di tempo necessaria; se viene
+calcolo) via UDP Multicast. La periodicit\`a viene implementata eseguendo una \mono{sleep} per l'intervallo di tempo specificato; se viene
 sollevata una \mono{InterruptedException}, libera le risorse allocate e termina.
 
-\paragraph*{Thread: LoggingTask.}
+\subsection*{Thread: LoggingTask.}
 Un thread \mono{LoggingTask} viene istanziato per gestire il meccanismo di logging. Si occupa di prelevare da una coda concorrente condivisa
 coi thread workers il messaggio da salvare nel log e, ricevuta una \mono{interrupt}, libera le risorse allocate e termina.
 
@@ -258,154 +425,94 @@ Un messaggio all'interno del log segue la seguente sintassi:
 [<timestamp>][<thread id>][<client id>]{[<username>]}[I/O ERROR <exception message>][DISCONNECTION]
 \end{lstlisting}
 
-\paragraph*{Thread: BackupTask.}
+\subsection*{Thread: BackupTask.}
 Un thread \mono{BackupTask} viene istanziato per gestire il meccanismo di backup. Si occupa di chiamare i metodi forniti dalle API degli
 storage (degli utenti e dei post) e si rimette in idle chiamando una \mono{sleep} per l'intervallo di tempo specificato nel file di
 configurazione; ricevuta una \mono{interrupt}, termina.
 
-\paragraph*{Thread: ShutdownHook.}
-Il main provvede a installare uno shutdown hook che si occupa di inviare \mono{interrupt} a tutti i thread menzionati sopra e di
+\subsection*{Thread: ShutdownHook.}
+Il Main provvede a installare uno shutdown hook che si occupa di inviare \mono{interrupt} a tutti i thread menzionati sopra e di
 liberare le risorse allocate.
 
-\paragraph*{Thread worker: RequestHandler.}
+\subsection*{Thread worker: RequestHandler.}
 Un thread \mono{RequestHandler} viene istanziato per la gestione di un canale disponibile in lettura,
 \`e il vero e proprio backbone dell'intero sistema in quanto deve occuparsi del parsing di una richiesta e della conseguente costruzione
-del messaggio di risposta. La logica implementata \`e la seguente: si valida la richiesta e la si gestisce ricorrendo ai metodi
-forniti dalla API degli storage (degli utenti e dei post), si formatta ed invia la risposta alla coda concorrente condivisa col task
-dedicato al logging, si costruisce un messaggio di risposta formato da una coppia (codice, risposta) lo salva su un insieme condiviso
-e ``avvisa il manager'' (ossia risveglia il Main che, a questo punto, provveder\`a a registrare il canale in scrittura).
+del messaggio di risposta. La logica implementata \`e la seguente:
+\begin{itemize}[itemsep=0pt, parsep=0pt, topsep=0pt]
+	\item Si valida la richiesta.
+	\item Si effettua il parsing della richiesta e si chiama il metodo fornito dalla APi di uno degli storage in grado di elaborare la
+	richiesta.
+	\item Si formatta ed invia la risposta alla coda concorrente condivisa col task dedicato al logging.
+	\item Si costruisce un messaggio di risposta formato da una coppia (codice, risposta) e lo si salva su un insieme condiviso.
+	\item Si ``avvisa il manager'': si risveglia il Main (che era bloccato su una select): a questo punto, (il Main) provveder\`a a
+	registrare il canale in scrittura.
+\end{itemize}
 
-\paragraph*{Thread worker: MessageDispatcher.}
+\subsection*{Thread worker: MessageDispatcher.}
 Un thread \mono{MessageDispatcher} viene istanziato per la gestione di un canale disponibile in
 scrittura. Si occupa di recuperare il buffer di risposta costruito dal RequestHandler e di inviarlo; infine, risveglia il Main che
 registrer\`a nuovamente il canale per eventuali letture successive.
 
-\paragraph*{Strutture dati condivise.}
+\subsection*{Strutture dati condivise.}
 Il server usa direttamente tre strutture dati condivise (e completamente slegate una dall'altra):
 \begin{itemize}[topsep=0pt, itemsep=0pt, parsep=0pt]
-	\item l'insieme \mono{toBeRegistered} (istanziato come un
-	\mono{ConcurrentHashMap.newKeySet} e utilizzato sia dal manager sia dagli worker) preserva canale, codice dell'operazione per cui
-	deve essere registrato (i.e. lettura o scrittura) e il \mono{ByteBuffer} utilizzato finora.
-	\item la coda concorrente \mono{logQueue} (istanziata come un \mono{LinkedBlockingQueue} e utilizzata sia dagli worker sia dal
-	thread che si occupa del logging) viene concorrentemente riempita dai thread worker e svuotata dal thread che si occupa del logging.
-	\item la tabella hash \mono{loggedInClients} (istanziata come una \mono{ConcurrentHashMap}) preserva la coppia canale, nome utente
-	con cui quel client ha eseguito l'operazione di login.
+	\item l'insieme \mono{toBeRegistered}:
+	\begin{itemize}
+		\item \`e l'insieme delle chiavi di una \mono{ConcurrentHashMap};
+		\item viene popolato dai thread workers e svuotato dal manager;
+		\item preserva canale, codice dell'operazione per cui deve essere registrato (i.e. lettura o scrittura) e il \mono{ByteBuffer}
+		utilizzato finora.
+	\end{itemize}
+	\item la coda concorrente \mono{logQueue}:
+	\begin{itemize}
+		\item \`e una \mono{LinkedBlockingQueue};
+		\item viene riempita dai thread worker e svuotata dal thread che si occupa del logging;
+		\item contiene i messaggi da scrivere nel file di logging.
+	\end{itemize}
+	\item la tabella hash \mono{loggedInClients}:
+	\begin{itemize}
+		\item \`e una \mono{ConcurrentHashMap};
+		\item viene popolata e svuotata dai thread workers;
+		\item preserva la coppia canale, nome utente con cui quel client ha eseguito l'operazione di login.
+	\end{itemize}
 \end{itemize}
 
-\subsection{Storage.}
-Il server ricorre alle API fornite dalle classi \mono{UserStorage} e \mono{PostStorage} per la gestione di tutte le richieste (valide)
-del client. All'interno del package dedicato (i.e. il package \mono{server.storage}), viene fornita la classe dichiarata package
-private \mono{Storage} che implementa due meccanismi di backup: \mono{backupCached} che implementa un meccanismo di caching scrivendo
-in append nel file specificato tutti e soli i dati dichiarati nuovi (non va a verificarlo, altrimenti si perderebbe tutto il vantaggio
-nell'efficienza) e \mono{backupNonCached} che sovrascrive l'intero file specificato andando a salvare tutti i dati. Per effettuare i
-backup, nello specifico, sia usano \mono{NIO} e \mono{Gson}.
-
-Di seguito, si andranno a descrivere le classi (e non le interfacce poich\'e meno interessanti e opportunamente documentate nel codice).
-\paragraph*{UserMap}
-Una \mono{UserMap} \`e uno storage di utenti che fa uso di tabelle hash. Per la descrizione dei metodi implementati, si faccia riferimento
-alla documentazione; di seguito si discuteranno le scelte implementative e la gestione della concorrenza.
-
-Utilizzando le tabelle hash \mono{interestsMap} e \mono{followersMap} (oltre alle due ovvie tabelle username->user) si riesce a ridurre
-a \(O(1)\) la complessit\`a algoritmica in tempo di tutti i metodi messi a disposizione.
-
-Poich\'e alcuni metodi modificano lo stato
-interno dello storage (nello specifico si tratta di \mono{register}, \mono{handleFollowUser}, \mono{handleUnfollowUser} e \mono{backupUsers})
-e questo \`e ``distribuito'' su pi\`u variabili, si sceglie di implementare l'atomicit\`a nelle modifiche
-utilizzando due strati di \mono{ReentrantReadWriteLock}: il primo strato corrisponde a \mono{backupLock}, acquisita in lettura da tutti
-i metodi a eccezione di quello per il backup e al secondo \mono{dataAccessLock}, acquisita in scrittura da tutti e soli i metodi che
-modificano lo stato interno dello storage. La prima lock risulta necessaria poich\'e - come evidente dal codice - la classe implementa
-un meccanismo di caching e, durante il backup, deve trasferire nei dati cached i dati nuovi (i.e. spostarli da \mono{usersToBeBackedUp}
-a \mono{usersBackedUp}).
-
-Si noti inoltre che modificare lo stato interno di un certo utente non corrisponda a modificare lo stato interno dello storage e che i metodi
-forniti dalla classe \mono{User} permettano modifiche concorrenti allo stato del medesimo utente.
-
-\paragraph*{PostMap}
-Una \mono{PostMap} \`e uno storage di post che fa uso di tabelle hash. Analogamente all'analisi della classe UserMap, si rimanda alla
-documentazione per la descrizione dei metodi messi a disposizione e si discuteranno scelte implementative e gestione della concorrenza.
-
-Utilizzando la tabella hash \mono{postsByAuthor} (oltre alle due ovvie tabelle id->post) si riesce a ridurre a \(O(1)\) la complessit\`a
-algoritmica in tempo di tutti i metodi messi a disposizione.
-
-Per quanto concerne la gestione della concorrenza, il discorso \`e lo stesso che per la classe UserMap; i metodi in gioco sono per\`o
-\mono{handleCreatePost}, \mono{handleDeletePost} (che forza anche un flush della cache al backup successivo), \mono{handleRewin} e
-\mono{backupPosts}.
-
-Come prima, si noti che modificare lo stato interno di un certo post non corrisponda a modificare lo stato interno dello storage e che i metodi
-forniti dalla classe \mono{RewinPost} permettano modifiche concorrenti allo stato del medesimo post.
-
-\subsection{User.}
-La classe \mono{User} descrive un utente all'interno dello storage. Per permettere modifiche in concorrenza allo stato interno di un utente
-si fa uso di blocchi \mono{synchronized} all'interno dei metodi.
-
-\subsection{Post.}
-La classe astratta \mono{Post} descrive lo scheletro di un post all'interno dello storage. Per la generazione concorrente di nuovi post da
-parte di thread differenti, si fa uso di una variabile \mono{generatorID} dichiarata \mono{AtomicInteger}.
-
-\paragraph*{RewinPost.}
-La classe \mono{RewinPost} implementa la classe astratta \mono{Post}. Per permettere modifiche in concorrenza allo stato interno
-si fa uso di metodi \mono{synchronized}.
-
-\subsection{Client.}
+\section{Client.}
 Il client dipende dal file di configurazione di cui si passa il path da linea di comando (in caso
-contrario, prover\`a a usare il file di configurazione \mono{./configs/client.properties});
-il file passato dovr\`a essere del seguente tipo:
-\begin{lstlisting}[style=code]
-SERVERADDRESS=<valid_server_address>
-TCPPORT=<tcp_port>
-UDPPORT=<udp_port>
-REGISTRYHOST=<rmi_registry_host>
-REGISTRYPORT=<rmi_registry_port>
-REGISTERSERVICENAME=<register_service_name>
-CALLBACKSERVICENAME=<callback_service_name>
-\end{lstlisting}
-Valgono le stesse osservazioni fatte per il server (per quanto riguarda il file di configurazione).
+contrario, prover\`a a usare il file di configurazione \mono{./configs/client.properties}).
 
-Di seguito, si andr\`a a dare una descrizione piuttosto sommaria (sebbene sufficiente) del comportamento del client poich\'e per la descrizione
-dei comandi (sia a livello sintattico sia semantico) si rimanda al codice considerato che si tratta solo di inviare e ricevere stringhe
-di un certo formato via TCP (le uniche funzionalit\`a davvero implementate dal client riguardano solo la formattazione delle risposte
-ricevute dal server).
+Non implementa molte funzionalit\`a, \`e un thin client che si occupa di fare perlopi\`u ``pretty printing'' di oggetti di vari tipi.
 
-\paragraph*{Struttura interna.}
+\subsection*{Struttura interna.}
 Al momento dell'avvio, il client si connette via TCP al server seguendo le indicazioni precisate nel file di configurazione.
 Una volta connesso, legge da linea di comando attraverso un loop infinito fino a che non viene inserito il comando di quit ``:q!''.
 
-Per l'invio di messaggi al server e la gestione delle risposte ricevute si fa riferimento alla classe \mono{Command} definita
-all'interno del package \mono{Client}.
+Per l'invio di messaggi al server e la gestione delle risposte ricevute si fa riferimento al package \mono{client}.
 
-\paragraph*{Concorrenza e strutture dati condivise.}
+\subsection*{Concorrenza e strutture dati condivise.}
 Al momento della login, il client invia al server una richiesta per recuperare i followers gi\`a presenti (per l'utente per cui si \`e
 effettuata la login) e una (richiesta) per ricevere le coordinate di multicast.
 
-A questo punto, il client istanzia un \mono{RMIFollowerSet} inizializzato con tutti gli utenti ricevuti e un thread di tipo
-\mono{MulticastWorker} dedicato
-alla gestione dei messaggi di Multicast con cui condivide
-\mono{multicastMessage} (una coda concorrente dichiarata di tipo \mono{ConcurrentLinkedQueue}) e, prima di leggere da STDIN un nuovo comando,
-controlla se nella coda \`e stato aggiunto un messaggio e, in tal caso, lo rimuove e lo stampa su STDOUT.
+A questo punto, il client istanzia un \mono{RMIFollowerSet} inizializzato con tutti gli utenti ricevuti e un
+\mono{MulticastWorker} dedicato alla gestione dei messaggi di Multicast con cui condivide la coda concorrente \mono{multicastMessage}:
+una \mono{ConcurrentLinkedQueue} che il client controlla sia vuota (ed eventualmente, svuota) prima di leggere un nuovo comando da STDIN.
 
-\paragraph*{Formattazione dei messaggi di risposta.}
+\subsection*{Formattazione dei messaggi di risposta.}
 Poich\'e i messaggi ricevuti dal server seguono una certa sintassi e, nel caso in cui contengano delle entit\`a allora queste sono dei
 dati JSON validi, il client implementa delle classi definite private static corrispondenti a ciascuno dei possibili dati JSON
-ricevibili e utilizza \mono{Gson} per effettuarne il parsing
-e, di seguito, istanziare oggetti del tipo appropriato.
+ricevibili e utilizza \mono{Gson} per effettuarne il parsing e, di seguito, istanziare oggetti del tipo appropriato.
 
-\subsection{Protocollo di comunicazione.}
-Per la comunicazione tra il client e il server viene messa a dispozione - all'interno del package ``api'' - la classe \mono{Communication}
-(all'interno dell'omonimo file).
-
-I messaggi inviati e ricevuti seguono in generale la seguente sintassi: \(LUNGHEZZA+MESSAGGIO\) con LUNGHEZZA la lunghezza di MESSAGGIO
-convertito in bytes, + l'operatore di concatenazione e MESSAGGIO il messaggio in bytes: in questo modo si permette al chiamante di essere
-sicuro di aver inviato e/o ricevuto per intero un messaggio (evitando qualsivoglia lettura o scrittura parziale).
-
-Nel caso particolare in cui un messaggio M sia formato da una collezione di entit\`a, allora MESSAGGIO sar\`a a sua volta una collezione
-di messaggi con la struttura sopra menzionata e, dunque, M sar\`a del tipo
-\(LUNGHEZZA_{TOTALE}+\displaystyle\sum_{i=1}^{n}LUNGHEZZA_{i}+MESSAGGIO_{i}\) (intendendo sempre + come operatore di concatenazione).
-
-I metodi che si occupano dell'invio e della ricezione usano \mono{NIO}.
-
-\paragraph*{Codici di risposta.}
-Ogni messaggio inviato dal server al client \`e formato da due parti (<codice>, <corpo>) separate dal carattere di controllo CRLF, per
-avere informazioni sui codici implementati si rimanda alla classe \mono{ResponseCode} definita all'interno del package \mono{api}.
+\section{Testing del progetto.}
+Ai fini del testing del progetto, si ricorda la presenza dei due script per agevolarne l'esecuzione. Inoltre, per non partire da uno
+storage completamente vuoto, all'interno della cartella \mono{storage} si troveranno degli utenti gi\`a registrati; per ognuno valgono le
+seguenti regole:
+\begin{itemize}[topsep=0pt, itemsep=0pt, parsep=0pt]
+	\item Il nome utente \`e formato dalla stessa lettera (che chiameremo l) ripetuta 3 volte.
+	\item La password \`e uguale al nome utente.
+	\item I tag a cui \`e interessato sono l, l+1, l+2, l+3, l+4.
+\end{itemize}
+Si fa un esempio: l'utente \textbf{aaa} ha come password \textbf{aaa} e segue i tag \textbf{a}, \textbf{b}, \textbf{c}, \textbf{d},
+\textbf{e}. 
 
 \end{sloppypar}
 \end{document}
