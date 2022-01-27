@@ -523,7 +523,8 @@ public class ServerMain
 										}
 										else
 										{
-											callbackService.notifyNewFollower(username, followed);
+											try { callbackService.notifyNewFollower(users.usernameToUserString(username), followed); }
+											catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 											try
 											{
 												code = ResponseCode.OK;
@@ -579,7 +580,8 @@ public class ServerMain
 										}
 										else
 										{
-											callbackService.notifyUnfollow(username, unfollowed);
+											try { callbackService.notifyUnfollow(users.usernameToUserString(username), unfollowed); }
+											catch (NoSuchUserException shouldNeverBeThrown) { throw new IllegalStateException(shouldNeverBeThrown); }
 											try
 											{
 												code = ResponseCode.OK;
@@ -1240,7 +1242,12 @@ public class ServerMain
 		// setting up rmi:
 		UserStorage users = null;
 		try { users = UserMap.fromJSON(new File(configuration.userStorageFilename), new File(configuration.followingStorageFilename), new File(configuration.transactionsFilename)); }
-		catch (FileNotFoundException | IllegalArchiveException e) { users = new UserMap(); }
+		catch (FileNotFoundException | IllegalArchiveException e)
+		{
+			System.err.println("Warning: user storage could not be recovered from backup.");
+			e.printStackTrace();
+			users = new UserMap();
+		}
 		catch (IOException e)
 		{
 			System.err.println("Fatal error occurred while parsing user storage: now aborting...");
@@ -1249,9 +1256,17 @@ public class ServerMain
 		}
 		PostStorage posts = null;
 		try { posts = PostMap.fromJSON(new File(configuration.postStorageFilename), new File(configuration.postsInteractionsStorageFilename)); }
-		catch (IOException | IllegalArchiveException | InvalidGeneratorException e)
+		catch (IllegalArchiveException | InvalidGeneratorException e)
 		{
+			System.err.println("Warning: post storage could not be recovered from backup.");
+			e.printStackTrace();
 			posts = new PostMap();
+		}
+		catch (IOException e)
+		{
+			System.err.println("Fatal error occurred while parsing post storage: now aborting...");
+			e.printStackTrace();
+			System.exit(1);
 		}
 		RMICallbackService callbackService = null;
 		try  { callbackService = new RMICallbackService(); }
