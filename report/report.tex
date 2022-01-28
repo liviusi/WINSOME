@@ -356,6 +356,9 @@ Il package contiene le classi e i metodi utilizzati all'\textbf{interno del serv
 	implementa un meccanismo di caching scrivendo in append nel file specificato tutti e soli i dati dichiarati nuovi (non va a verificare
 	che questi siano veramente nuovi per non perdere in efficienza) e \mono{backupNonCached} che sovrascrive l'intero file specificato
 	andando a salvare tutti i dati. Usa \mono{Gson} per convertire ogni elemento dello storage in un dato JSON valido.
+
+	La versione di Java scelta consente a Gson l'uso di \mono{TypeAdapter} basati sul meccanismo di reflection, operazione non supportata
+	dalle versioni di Java pi\`u recenti (ved. \href{https://openjdk.java.net/jeps/403}{JEP 403}).
 	\item \mono{UserMap}: classe che utilizza tabelle hash per effettuare lo storing di oggetti di tipo User al proprio interno.
 	Si noti come utilizzare le tabelle hash \mono{interestsMap} e \mono{followersMap} in aggiunta alla tabella che salva gli utenti
 	permetta di ridurre a \(O(1)\) la complessit\`a algoritmica in tempo di tutti i metodi messi a disposizione (nonostante si vada
